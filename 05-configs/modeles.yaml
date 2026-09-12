@@ -1,0 +1,30 @@
+# modeles.yaml — profils de modèles nommés, pour basculer facilement
+# entre plusieurs LLM locaux sans retaper un id à chaque fois.
+#
+# Ce fichier ne se charge pas tout seul : 04-scripts/basculer-modele.sh lit
+# le profil demandé ici, puis réutilise setup-local-model.sh (déjà testé,
+# voir README) pour appliquer le changement dans ~/.dsh/settings.yaml.
+#
+# Chaque profil correspond à un usage documenté dans README.md, section
+# "Optimisation pour Mac Mini M4" : un modèle "instruct" rapide pour
+# l'exécution d'agent courante (outils, code), un modèle "thinking" plus
+# lent réservé aux tâches qui demandent un vrai raisonnement explicite
+# (skill-analyse-objectifs, décisions à fort enjeu).
+#
+# ⚠️ Les id ci-dessous sont des points de départ plausibles, pas des
+# valeurs vérifiées sur cette machine — remplace-les par ce que tu as
+# réellement tiré avec `ollama pull`, et confirme l'id exact avec :
+#   curl -s http://127.0.0.1:11434/v1/models | jq -r '.data[].id'
+# (même piège que documenté dans setup-local-model.sh : un id qui ne
+# correspond pas caractère pour caractère, y compris les ":", échoue en
+# 404 silencieux côté dsh).
+
+profils:
+  rapide:
+    modele: qwen2.5-coder:7b
+    description: "Modèle instruct — exécution d'agent courante (outils, code). Défaut recommandé au quotidien."
+  reflexion:
+    modele: deepseek-r1:7b
+    description: "Modèle thinking — analyse d'objectifs, décisions complexes, où le temps de raisonnement est justifié."
+
+profil-par-defaut: rapide

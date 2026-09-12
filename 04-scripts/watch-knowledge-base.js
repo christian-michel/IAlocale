@@ -8,7 +8,10 @@ import { logInfo, logSilentError } from './dsh-logger.js';
 const HARNESS_HOME = process.env.HARNESS_HOME || path.join(os.homedir(), 'dsh-harness');
 const KNOWLEDGE_BASE = path.join(HARNESS_HOME, '06-data');
 const INDEX_FILE = path.join(KNOWLEDGE_BASE, 'meta-index.json');
-const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.DS_Store']);
+// 'memoire' contient des données structurées (memoire.json, géré par
+// memoire-cli.js) interrogeables par requête exacte, pas du texte à
+// indexer sémantiquement — voir skill-gestion-memoire.md.
+const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.DS_Store', 'memoire']);
 const EXCLUDED_FILES = new Set(['meta-index.json']);
 
 function checksum(content) {

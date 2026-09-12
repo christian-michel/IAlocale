@@ -31,12 +31,21 @@ ici — voir plus bas.
   fichier existant contenant d'autres réglages — confirmé que seules les
   clés gérées (`llm-pi-ai.providers.ollama`, `agent-default-model`) sont
   modifiées, le reste est préservé intact.
-- Les 12 skills : frontmatter YAML validé individuellement.
+- Les 14 skills : frontmatter YAML validé individuellement.
 - Les 4 workflows : JSON validé syntaxiquement.
 - Toute la chaîne shell (`start.sh`, `install-plugins.sh`,
   `security-check.sh`) : testée de bout en bout dans un environnement sans
   Docker/Ollama/dsh (le cas réel avant ta première installation) — échoue
   proprement avec des messages clairs, jamais de plantage silencieux.
+- `memoire-cli.js` (`set`/`get`/`list`/`search`/`delete`/`clear`) et
+  `boucle-hook-stop.js` (cas succès, cas échec par épuisement du plafond
+  d'itérations, arguments manquants) : exécutés réellement, logs
+  structurés vérifiés dans `pipeline.jsonl`.
+- `boucle-surveillance.sh` : plusieurs cycles réels exécutés, arrêt
+  propre sur signal (trap) vérifié.
+- `basculer-modele.sh` : résolution de profil (`05-configs/modeles.yaml`)
+  testée, y compris profil inconnu ; délégation à `setup-local-model.sh`
+  confirmée jusqu'au point où Ollama devient nécessaire.
 
 ## ❌ Non vérifiable dans mon environnement
 
@@ -54,6 +63,12 @@ ici — voir plus bas.
 - `DSH-better-sidebar` : confirmé qu'il existe, mais je n'ai pas pu
   vérifier la syntaxe exacte d'installation depuis GitHub — le script gère
   l'échec proprement si la commande ne correspond pas.
+- Un mécanisme de hooks natif dans `dsh` (équivalent au hook `Stop` de
+  Claude Code) : jamais confirmé. `boucle-hook-stop.js` (section
+  "Boucles agentiques") reproduit l'effet depuis l'extérieur en encadrant
+  l'appel à `dsh`, sans dépendre d'un tel mécanisme — mais si `dsh` en
+  expose un réellement, ce sera une meilleure option le jour où c'est
+  vérifié.
 
 ## 📋 Vérification de la liste de plugins fournie
 
@@ -139,6 +154,48 @@ projet, serait autrement attrapé et oublié sans laisser de trace.
   par le watcher, donc consultable par `consulter-sagesse-interne` la fois
   suivante.
 
+## 🔁 Boucles agentiques
+
+Cinq façons distinctes de faire tourner ce système en boucle, détaillées
+dans `01-skills/skill-boucles-agentiques.md` — en résumé :
+
+| # | Boucle | Implémentation ici |
+|---|---|---|
+| 01 | Boucle agentique | native à `dsh`, rien à configurer |
+| 02 | Critère d'arrêt dans le prompt | déjà dans `skill-controleur-qualite`, `skill-testeur-docker` |
+| 03 | Condition d'achèvement persistante (`/goal`) | `03-workflows/systeme-auto-ameliorant-avec-controle.workflow.json` |
+| 04 | Hook Stop déterministe | `04-scripts/boucle-hook-stop.js` |
+| 05 | Surveillance périodique (`/loop`) ⚠️ | `04-scripts/boucle-surveillance.sh` |
+
+**Règle d'or : une boucle ne vaut que ce que vaut son critère d'arrêt.**
+La boucle 05 ne termine jamais d'elle-même — ne pas l'utiliser comme
+substitut à un vrai critère de complétion (boucles 03/04). Voir le skill
+pour la table complète et les cas d'usage de chacune.
+
+## 🧠 Mémoire structurée
+
+En complément de `06-data/sagesse/lecons-apprises.md` (texte libre,
+indexé pour la recherche sémantique), l'agent dispose d'une mémoire
+structurée qu'il pilote lui-même en CRUD complet :
+`04-scripts/memoire-cli.js` (créer/lire/lister/rechercher/supprimer/vider
+des entrées typées et taguées, stockées dans
+`06-data/memoire/memoire.json`, exclu de l'index RAG). Voir
+`01-skills/skill-gestion-memoire.md` pour la méthode et la répartition
+des usages entre les deux mémoires.
+
+## 🔀 Modèles interchangeables
+
+`05-configs/modeles.yaml` déclare des profils de modèles nommés (ex.
+`rapide` pour l'exécution d'agent courante, `reflexion` pour les tâches
+qui demandent un vrai raisonnement — voir la section "Optimisation pour
+Mac Mini M4" ci-dessus). `04-scripts/basculer-modele.sh <profil>` résout
+le profil et délègue à `setup-local-model.sh` :
+
+```bash
+./04-scripts/basculer-modele.sh              # liste les profils
+./04-scripts/basculer-modele.sh reflexion    # bascule vers le profil "reflexion"
+```
+
 ## 🚀 Installation
 
 ```bash
@@ -173,7 +230,7 @@ indexe automatiquement ; aucun changement de code n'est nécessaire.
 
 ```
 dsh-harness/
-├── 01-skills/              # 12 skills (10 du plan d'origine + 2 nouveaux)
+├── 01-skills/              # 14 skills (12 précédents + boucles-agentiques, gestion-memoire)
 ├── 02-plugins/              # agentic-research, dsh-find-plugins (clonés à l'install)
 ├── 03-workflows/            # 4 workflows JSON (schéma non-vérifiable formellement)
 ├── 04-scripts/
@@ -181,13 +238,18 @@ dsh-harness/
 │   ├── errors-cli.js         # consultation CLI du journal (testé)
 │   ├── watch-knowledge-base.js
 │   ├── docker-test-runner.js
+│   ├── memoire-cli.js        # mémoire structurée CRUD (testé)
+│   ├── boucle-hook-stop.js   # boucle 04 : critère d'arrêt déterministe (testé)
+│   ├── boucle-surveillance.sh # boucle 05 : surveillance périodique (testé)
+│   ├── basculer-modele.sh    # bascule entre profils de 05-configs/modeles.yaml (testé)
 │   ├── security-check.sh
 │   ├── install-plugins.sh    # plugins corrigés (dsh-workflow, dsh-tui, etc.)
 │   └── setup-local-model.sh  # bascule vers Ollama local (testé, fusion YAML)
 ├── 05-configs/
 │   ├── settings.local-ollama.yaml   # schéma vérifié
-│   └── profile-plugins.yml          # schéma non-vérifié, à confirmer
-├── 06-data/                 # personnalite/, sagesse/, cours-techniques/, cours-webmarketing/
+│   ├── profile-plugins.yml          # schéma non-vérifié, à confirmer
+│   └── modeles.yaml                 # profils de modèles nommés (LLM interchangeables)
+├── 06-data/                 # personnalite/, sagesse/, cours-techniques/, cours-webmarketing/, memoire/
 ├── logs/
 └── start.sh
 ```
