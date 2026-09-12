@@ -1,0 +1,40 @@
+# settings.local-ollama.yaml — bloc "provider" local pour dsh, vérifié
+# contre la documentation officielle Ollama/dsh (docs.ollama.com,
+# github.com/deepseek-ai/deepseek-harness).
+#
+# CE FICHIER NE SE CHARGE PAS TOUT SEUL. dsh lit sa config depuis un seul
+# fichier : $DSH_HOME/settings.yaml (par défaut ~/.dsh/settings.yaml).
+# 04-scripts/setup-local-model.sh fusionne ce bloc dedans automatiquement
+# (voir ce script pour le détail). Si tu préfères le faire à la main,
+# colle ce contenu dans ~/.dsh/settings.yaml.
+#
+# Par défaut, dsh démarre branché sur l'API cloud DeepSeek. Ce fichier le
+# fait pointer sur ton Ollama local à la place : aucune donnée ne sort de
+# ta machine tant que tu restes sur la route "ollama".
+#
+# ⚠️ Le modèle "qwen2.5-coder:7b" ci-dessous est un point de départ
+# raisonnable pour un Mac Mini M4 24 Go (empreinte mémoire modeste, bon
+# niveau en code), mais remplace-le par ce que tu as réellement tiré avec
+# `ollama pull`. Vérifie l'id exact avec :
+#   curl -s http://127.0.0.1:11434/v1/models | jq -r '.data[].id'
+# (l'id doit correspondre caractère pour caractère, y compris les ":")
+
+llm-pi-ai:
+  providers:
+    ollama:
+      displayName: Ollama (local)
+      apiKeyEnv: OLLAMA_API_KEY   # nécessaire même si Ollama n'exige pas de clé — voir setup-local-model.sh
+      api: openai-completions
+      baseURL: http://127.0.0.1:11434/v1
+      compat:
+        supportsDeveloperRole: false   # Ollama attend le rôle "system", pas "developer"
+        maxTokensField: max_tokens     # plutôt que max_completion_tokens
+      models:
+        - id: qwen2.5-coder:7b
+          name: Qwen2.5 Coder 7B (local)
+          contextWindow: 32768   # DOIT correspondre à OLLAMA_CONTEXT_LENGTH réellement servi (voir setup-local-model.sh)
+          maxTokens: 8192
+
+agent-default-model:
+  provider: ollama
+  model: qwen2.5-coder:7b

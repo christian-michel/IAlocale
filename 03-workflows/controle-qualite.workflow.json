@@ -1,0 +1,63 @@
+{
+  "name": "controle-qualite",
+  "description": "Vérifie, teste et valide une réponse — en tenant compte de l'historique d'erreurs récentes.",
+  "version": "2.1.0",
+  "inputs": {
+    "reponse_brute": { "type": "string" },
+    "demande_originale": { "type": "string" },
+    "criteres": { "type": "object" }
+  },
+  "steps": [
+    {
+      "id": "consulter-erreurs-recentes",
+      "agent": { "type": "subagent", "instructions": "Exécute `node 04-scripts/errors-cli.js prompt-context --hours 24` et retourne le résultat tel quel." },
+      "outputs": { "contexte_erreurs": "$.result" }
+    },
+    {
+      "id": "verifier-reponse",
+      "agent": {
+        "type": "subagent",
+        "skill": "skill-controleur-qualite",
+        "instructions": "Vérifie la réponse : {{reponse_brute}}\n\n{{contexte_erreurs}}",
+        "inputs": { "demande": "{{demande_originale}}", "criteres": "{{criteres}}" }
+      },
+      "outputs": { "evaluation": "$.result" }
+    },
+    {
+      "id": "detecter-code",
+      "agent": { "type": "subagent", "skill": "skill-extracteur-tests", "instructions": "Extrait le code et génère des tests." },
+      "outputs": { "code_extraits": "$.result" }
+    },
+    {
+      "id": "tester-code",
+      "condition": "code_extraits is not empty",
+      "parallel": true,
+      "for_each": "code_extraits",
+      "agent": { "type": "subagent", "skill": "skill-testeur-docker", "instructions": "Exécute les tests dans Docker via 04-scripts/docker-test-runner.js." },
+      "outputs": { "resultats_tests": "$.result" }
+    },
+    {
+      "id": "corriger-si-invalide",
+      "condition": "evaluation.statut == 'INVALIDE' or resultats_tests.statut == 'ECHEC'",
+      "agent": {
+        "type": "subagent",
+        "skill": "skill-ameliorateur",
+        "instructions": "Corrige la réponse en tenant compte des erreurs remontées.",
+        "inputs": { "reponse_originale": "{{reponse_brute}}", "corrections": "{{evaluation.actions_correctives}}", "resultats_tests": "{{resultats_tests}}" }
+      },
+      "outputs": { "reponse_corrigee": "$.result.reponse_corrigee" }
+    },
+    {
+      "id": "apprendre",
+      "condition": "evaluation.statut == 'INVALIDE' or resultats_tests.statut == 'ECHEC'",
+      "agent": { "type": "subagent", "skill": "skill-apprendre-des-echecs", "instructions": "Enregistre une leçon à partir de cet échec." },
+      "outputs": { "lecon": "$.result" }
+    }
+  ],
+  "output": {
+    "statut": "$.verifier-reponse.evaluation.statut",
+    "reponse_finale": { "condition": "statut == 'VALIDE'", "value": "{{reponse_brute}}" },
+    "reponse_corrigee": "$.corriger-si-invalide.reponse_corrigee",
+    "rapport_tests": "$.tester-code.resultats_tests"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "recherche-approfondie",
+  "description": "Effectue une recherche approfondie en consultant d'abord la sagesse locale, puis en vérifiant à l'externe.",
+  "version": "1.0.0",
+  "inputs": { "question": { "type": "string" } },
+  "steps": [
+    { "id": "analyser", "agent": { "type": "subagent", "skill": "skill-analyse-objectifs", "instructions": "Analyse la question : {{question}}" }, "outputs": { "analyse": "$.result" } },
+    { "id": "consulter-sagesse", "agent": { "type": "subagent", "skill": "skill-consulter-sagesse-interne", "instructions": "Consulte les connaissances locales." }, "outputs": { "sagesse": "$.result" } },
+    { "id": "verifier-externe", "agent": { "type": "subagent", "skill": "skill-verifier-et-croiser", "instructions": "Vérifie et croise les informations.", "inputs": { "sagesse_interne": "{{sagesse}}", "demande": "{{question}}" } }, "outputs": { "validation": "$.result" } }
+  ],
+  "output": { "analyse": "$.analyser.analyse", "validation": "$.verifier-externe.validation" }
+}

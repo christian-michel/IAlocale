@@ -1,0 +1,32 @@
+{
+  "name": "systeme-auto-ameliorant-avec-controle",
+  "description": "Système complet auto-améliorant avec contrôle de qualité et rétro-analyse des erreurs.",
+  "version": "1.2.0",
+  "inputs": {
+    "demande": { "type": "string" },
+    "seuil_satisfaction": { "type": "number", "default": 8.0 },
+    "max_iterations": { "type": "number", "default": 5 }
+  },
+  "steps": [
+    {
+      "id": "boucle-amelioration",
+      "loop": {
+        "until": "score_global >= seuil_satisfaction and statut_validation == 'VALIDE' or iteration >= max_iterations",
+        "max_iterations": "{{max_iterations}}"
+      },
+      "steps": [
+        { "id": "experimenter", "agent": { "type": "workflow", "name": "meta-experimentation", "args": { "demande": "{{demande}}" } }, "outputs": { "resultats": "$.result" } },
+        { "id": "evaluer", "parallel": true, "for_each": "resultats.resultats_experiences", "agent": { "type": "subagent", "skill": "skill-evaluateur", "instructions": "Évalue ce résultat." }, "outputs": { "evaluations": "$.result" } },
+        { "id": "identifier-meilleur", "agent": { "type": "subagent", "instructions": "Compare les évaluations, trouve le meilleur." }, "outputs": { "meilleur_score": "$.result.meilleur_score", "meilleure_reponse": "$.result.meilleure_reponse" } },
+        { "id": "controler-qualite", "agent": { "type": "workflow", "name": "controle-qualite", "args": { "reponse_brute": "{{meilleure_reponse}}", "demande_originale": "{{demande}}" } }, "outputs": { "statut_validation": "$.result.statut", "reponse_corrigee": "$.result.reponse_corrigee" } }
+      ],
+      "outputs": { "score_global": "$.identifier-meilleur.meilleur_score", "statut_validation": "$.controler-qualite.statut_validation" }
+    },
+    {
+      "id": "synthese-finale",
+      "agent": { "type": "subagent", "skill": "skill-synthese-finale", "instructions": "Rédige la réponse finale en intégrant les apprentissages accumulés." },
+      "outputs": { "reponse_finale": "$.result.reponse" }
+    }
+  ],
+  "output": { "reponse": "$.synthese-finale.reponse_finale" }
+}

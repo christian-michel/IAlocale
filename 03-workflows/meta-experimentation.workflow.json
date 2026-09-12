@@ -1,0 +1,19 @@
+{
+  "name": "meta-experimentation",
+  "description": "Lance plusieurs workflows en parallèle pour comparer leurs résultats.",
+  "version": "1.0.0",
+  "inputs": {
+    "demande": { "type": "string" },
+    "workflows_a_tester": { "type": "array", "default": ["recherche-approfondie"] }
+  },
+  "steps": [
+    {
+      "id": "lancer-workflows",
+      "parallel": true,
+      "for_each": "workflows_a_tester",
+      "agent": { "type": "workflow", "name": "{{item}}", "args": { "question": "{{demande}}" } },
+      "outputs": { "resultat_brut": "$.result" }
+    }
+  ],
+  "output": { "resultats": "$.lancer-workflows.resultats" }
+}

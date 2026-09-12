@@ -1,0 +1,40 @@
+# profile-plugins.yml — configuration des plugins installés.
+#
+# ⚠️ Contrairement à settings.yaml (schéma vérifié contre la doc officielle
+# dsh/Ollama), CE fichier reprend la structure d'un tutoriel d'origine que
+# je n'ai pas pu confirmer champ par champ contre la doc réelle de chaque
+# plugin (dsh-browser, modlens...). Avant de t'y fier :
+#   dsh --profile web --dump-config
+# ...et compare avec ce qui suit. Les noms de plugins et l'existence des
+# paquets sont vérifiés ; le détail des clés de config ci-dessous ne l'est
+# pas à 100 %.
+
+plugins:
+  # Sécurisation du navigateur — autoApprove: false est le réglage sûr :
+  # l'agent doit demander confirmation avant d'agir sur une page.
+  - id: dsh-browser
+    name: 'dsh-browser'
+    config:
+      autoApprove: false
+      allowedDomains:
+        - "*.google.com"
+        - "*.github.com"
+        - "*.stackoverflow.com"
+        - "docs.python.org"
+        - "developer.mozilla.org"
+      disallowedDomains:
+        - "*.onion"
+        - "*.bit"
+
+  # Vision locale via Ollama — reste 100% local si le modèle llava (ou
+  # équivalent) tourne sur la même machine.
+  - id: modlens
+    name: '@liustack/modlens'
+    config:
+      provider: ollama
+      model: llava:latest
+      baseUrl: http://localhost:11434
+
+knowledgeBase:
+  path: "__HARNESS_HOME__/06-data/"
+  watcherScript: "__HARNESS_HOME__/04-scripts/watch-knowledge-base.js"
