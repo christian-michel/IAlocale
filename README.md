@@ -92,9 +92,10 @@ reconfigure pour Ollama via `04-scripts/setup-local-model.sh`, qui :
    palier selon la mémoire détectée, ce qui peut silencieusement tronquer
    les conversations de l'agent sans qu'aucune erreur ne le signale — voir
    ci-dessous).
-2. Télécharge le modèle choisi (`qwen2.5-coder:7b` par défaut — change-le
-   au besoin) et vérifie que l'id déclaré correspond **exactement** (avec
-   les `:`) à ce que sert Ollama, pour éviter un 404 silencieux.
+2. Télécharge le modèle choisi (`qwen3-coder:30b-a3b-q4_K_M` par défaut —
+   change-le au besoin, ou utilise `04-scripts/basculer-modele.sh`) et
+   vérifie que l'id déclaré correspond **exactement** (avec les `:`) à ce
+   que sert Ollama, pour éviter un 404 silencieux.
 3. Fusionne le bloc `provider` local dans `~/.dsh/settings.yaml`, sans
    toucher au reste de ta config.
 4. Configure la variable `OLLAMA_API_KEY` (factice mais requise — dsh
@@ -124,14 +125,27 @@ bien à ce que tu as déclaré.
   d'agent.** Un modèle qui réfléchit avant chaque appel d'outil passe le
   plus clair de son temps sur des tokens de raisonnement que la boucle
   d'agent jette ensuite — pour du code assisté par outils, un modèle
-  instruct de taille plus modeste est souvent nettement plus rapide pour
-  un résultat équivalent. Réserve le "thinking" aux tâches qui en ont
-  vraiment besoin (skill `analyse-objectifs` par exemple), pas à
-  l'exécution courante.
-- **Dimensionnement mémoire** : un modèle 8B en Q4 tient dans ~5 Go — sur
-  24 Go de mémoire unifiée, tu as de la marge pour le contexte, Docker, et
-  le reste du système, tant que tu ne fais pas tourner plusieurs gros
-  modèles en simultané.
+  instruct est souvent nettement plus rapide pour un résultat équivalent.
+  Réserve le "thinking" aux tâches qui en ont vraiment besoin (skill
+  `analyse-objectifs` par exemple), pas à l'exécution courante — voir les
+  profils `rapide`/`reflexion` de `05-configs/modeles.yaml`, à sélectionner
+  avec `04-scripts/basculer-modele.sh`.
+- **Privilégie un MoE à peu de paramètres actifs plutôt qu'un dense de
+  même taille "totale".** Le profil `rapide` (`qwen3-coder:30b-a3b-q4_K_M`)
+  a 30 Md de paramètres au total mais n'en active que 3 Md par passe — la
+  vitesse d'un petit modèle dense, les connaissances d'un plus gros.
+- **Dimensionnement mémoire** : ce même modèle en Q4 tient dans ~19 Go —
+  sur 24 Go de mémoire unifiée, il reste ~5 Go pour le contexte, le reste
+  du système. Ne fais tourner qu'un seul profil à la fois (24 Go ne
+  permet pas de charger `rapide` et `reflexion` simultanément).
+- **Pourquoi pas Kimi-K2.6 ou GLM-5.2** (demandés initialement) : ce sont
+  des MoE à ~1000 Md et ~744 Md de paramètres *totaux* — même en
+  quantification la plus agressive publiée, ils demandent respectivement
+  ~394 Go et ~241 Go de mémoire, très loin des 24 Go disponibles. Ollama
+  ne les propose d'ailleurs qu'en tags `:cloud` (renvoi vers
+  l'infrastructure Moonshot/Z.ai), ce qui violerait la contrainte "aucune
+  API cloud" en tête de ce fichier. Détail et sources dans
+  `05-configs/modeles.yaml`.
 
 ## 📝 Logs et rétro-analyse (repris et adapté du projet précédent)
 
@@ -205,11 +219,12 @@ cd ~/dsh-harness
 # 1. Installer dsh + tous les plugins
 ./04-scripts/install-plugins.sh
 
-# 2. Configurer le modèle local (remplace le modèle par défaut si besoin)
-./04-scripts/setup-local-model.sh qwen2.5-coder:7b
+# 2. Configurer le modèle local (profil "rapide" par défaut, voir
+#    05-configs/modeles.yaml — ou directement : ./04-scripts/basculer-modele.sh rapide)
+./04-scripts/setup-local-model.sh qwen3-coder:30b-a3b-q4_K_M
 
 # 3. Vérifier que le contexte réellement servi correspond
-ollama run qwen2.5-coder:7b 'bonjour' >/dev/null && ollama ps
+ollama run qwen3-coder:30b-a3b-q4_K_M 'bonjour' >/dev/null && ollama ps
 
 # 4. Premier test en tâche unique (headless), avant de lancer l'interface web
 dsh --profile headless 'Explique-moi ce que fait 04-scripts/dsh-logger.js'

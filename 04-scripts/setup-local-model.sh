@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-MODEL="${1:-qwen2.5-coder:7b}"
+MODEL="${1:-qwen3-coder:30b-a3b-q4_K_M}"
 DSH_SETTINGS="$HOME/.dsh/settings.yaml"
 CONTEXT_LENGTH=32768
 

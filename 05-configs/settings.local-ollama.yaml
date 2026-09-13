@@ -12,12 +12,17 @@
 # fait pointer sur ton Ollama local à la place : aucune donnée ne sort de
 # ta machine tant que tu restes sur la route "ollama".
 #
-# ⚠️ Le modèle "qwen2.5-coder:7b" ci-dessous est un point de départ
-# raisonnable pour un Mac Mini M4 24 Go (empreinte mémoire modeste, bon
-# niveau en code), mais remplace-le par ce que tu as réellement tiré avec
-# `ollama pull`. Vérifie l'id exact avec :
+# ⚠️ Le modèle "qwen3-coder:30b-a3b-q4_K_M" ci-dessous (profil "rapide" de
+# 05-configs/modeles.yaml) est un point de départ raisonnable pour un Mac
+# Mini M4 24 Go : MoE 30B total / 3B actifs, ~19 Go en Q4 — mais remplace-le
+# par ce que tu as réellement tiré avec `ollama pull` si tu utilises un
+# autre profil. Vérifie l'id exact avec :
 #   curl -s http://127.0.0.1:11434/v1/models | jq -r '.data[].id'
 # (l'id doit correspondre caractère pour caractère, y compris les ":")
+#
+# En pratique, préfère `04-scripts/basculer-modele.sh <profil>` à l'édition
+# manuelle de ce fichier : il fait la même chose sans risquer une faute de
+# frappe sur l'id.
 
 llm-pi-ai:
   providers:
@@ -30,11 +35,11 @@ llm-pi-ai:
         supportsDeveloperRole: false   # Ollama attend le rôle "system", pas "developer"
         maxTokensField: max_tokens     # plutôt que max_completion_tokens
       models:
-        - id: qwen2.5-coder:7b
-          name: Qwen2.5 Coder 7B (local)
+        - id: qwen3-coder:30b-a3b-q4_K_M
+          name: Qwen3 Coder 30B-A3B Q4 (local)
           contextWindow: 32768   # DOIT correspondre à OLLAMA_CONTEXT_LENGTH réellement servi (voir setup-local-model.sh)
-          maxTokens: 8192
+          maxTokens: 8192        # le modèle supporte nativement 256K — valeur ici volontairement prudente
 
 agent-default-model:
   provider: ollama
-  model: qwen2.5-coder:7b
+  model: qwen3-coder:30b-a3b-q4_K_M
