@@ -52,6 +52,12 @@
       "condition": "evaluation.statut == 'INVALIDE' or resultats_tests.statut == 'ECHEC'",
       "agent": { "type": "subagent", "skill": "skill-apprendre-des-echecs", "instructions": "Enregistre une leçon à partir de cet échec." },
       "outputs": { "lecon": "$.result" }
+    },
+    {
+      "id": "declencher-auto-amelioration",
+      "condition": "evaluation.statut == 'INVALIDE' or resultats_tests.statut == 'ECHEC'",
+      "agent": { "type": "workflow", "name": "auto-amelioration", "args": { "contexte": "Déclenché après un échec significatif : {{lecon}}" } },
+      "outputs": { "resultat_auto_amelioration": "$.result" }
     }
   ],
   "output": {

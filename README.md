@@ -31,7 +31,8 @@ ici — voir plus bas.
   fichier existant contenant d'autres réglages — confirmé que seules les
   clés gérées (`llm-pi-ai.providers.ollama`, `agent-default-model`) sont
   modifiées, le reste est préservé intact.
-- Les 14 skills : frontmatter YAML validé individuellement.
+- Les 15 skills : frontmatter YAML validé individuellement
+  (`node 04-scripts/valider-skills-workflows.js`).
 - Les 4 workflows : JSON validé syntaxiquement.
 - Toute la chaîne shell (`start.sh`, `install-plugins.sh`,
   `security-check.sh`) : testée de bout en bout dans un environnement sans
@@ -197,6 +198,45 @@ des entrées typées et taguées, stockées dans
 `01-skills/skill-gestion-memoire.md` pour la méthode et la répartition
 des usages entre les deux mémoires.
 
+## 🔄 Auto-itération et auto-implémentation
+
+Le système peut se modifier lui-même — pas seulement proposer, réellement
+appliquer. Périmètre volontairement restreint : uniquement
+`01-skills/*.md` et `03-workflows/*.json`, jamais `04-scripts/` ni
+`05-configs/` (décision explicite, voir
+`01-skills/skill-auto-implementation.md`).
+
+```
+skill-ameliorateur (propose, en tenant compte de 06-data/personnalite/valeurs.md)
+        ↓
+04-scripts/auto-implementer.js (applique sur une branche git dédiée)
+        ↓
+04-scripts/valider-skills-workflows.js (vérification déterministe)
+        ↓
+    fusion si vert · branche conservée pour relecture si rouge · jamais de push
+```
+
+Trois déclencheurs, combinables : sur demande explicite (workflow
+`03-workflows/auto-amelioration.workflow.json`), après un échec
+significatif (enchaîné automatiquement depuis
+`controle-qualite.workflow.json`), ou périodiquement via
+`boucle-surveillance.sh` (qui ne fait que déclencher — le vrai critère
+d'arrêt reste la vérification déterministe à l'intérieur du cycle).
+
+`06-data/personnalite/valeurs.md` porte le principe directeur de toute
+auto-modification : chercher le bonheur et la sagesse, l'harmonie avec
+l'environnement et avec les autres — un critère que `skill-evaluateur`
+note explicitement, mais qui reste un jugement du modèle, pas un verrou
+automatique (seule la validité syntaxique l'est).
+
+⚠️ Comme `04-scripts/*.js` est testable sans Ollama/dsh,
+`auto-implementer.js` a été testé réellement (fusion réussie, rejet après
+échec de vérification avec branche conservée, rejet d'un type/chemin hors
+périmètre y compris une tentative de traversée de chemin) — dans un dépôt
+jetable, jamais dans ce dépôt-ci. Le reste de la chaîne (orchestration par
+`dsh-workflow`) hérite de la même réserve que les autres workflows : non
+vérifiable formellement dans mon environnement.
+
 ## 🔀 Modèles interchangeables
 
 `05-configs/modeles.yaml` déclare des profils de modèles nommés (ex.
@@ -245,9 +285,11 @@ indexe automatiquement ; aucun changement de code n'est nécessaire.
 
 ```
 dsh-harness/
-├── 01-skills/              # 14 skills (12 précédents + boucles-agentiques, gestion-memoire)
+├── .gitignore               # logs/, 06-data/memoire/, 02-plugins/, meta-index.json...
+├── 01-skills/              # 15 skills (+ boucles-agentiques, gestion-memoire, auto-implementation)
 ├── 02-plugins/              # agentic-research, dsh-find-plugins (clonés à l'install)
-├── 03-workflows/            # 4 workflows JSON (schéma non-vérifiable formellement)
+├── 03-workflows/            # 5 workflows JSON (schéma non-vérifiable formellement)
+│   └── auto-amelioration.workflow.json   # propose → évalue → applique (auto-implementer.js)
 ├── 04-scripts/
 │   ├── dsh-logger.js         # logs structurés + SILENT_ERROR (testé)
 │   ├── errors-cli.js         # consultation CLI du journal (testé)
@@ -257,6 +299,8 @@ dsh-harness/
 │   ├── boucle-hook-stop.js   # boucle 04 : critère d'arrêt déterministe (testé)
 │   ├── boucle-surveillance.sh # boucle 05 : surveillance périodique (testé)
 │   ├── basculer-modele.sh    # bascule entre profils de 05-configs/modeles.yaml (testé)
+│   ├── valider-skills-workflows.js  # vérification déterministe skills/workflows (testé)
+│   ├── auto-implementer.js   # applique une proposition sur branche git dédiée (testé)
 │   ├── security-check.sh
 │   ├── install-plugins.sh    # plugins corrigés (dsh-workflow, dsh-tui, etc.)
 │   └── setup-local-model.sh  # bascule vers Ollama local (testé, fusion YAML)
@@ -264,7 +308,7 @@ dsh-harness/
 │   ├── settings.local-ollama.yaml   # schéma vérifié
 │   ├── profile-plugins.yml          # schéma non-vérifié, à confirmer
 │   └── modeles.yaml                 # profils de modèles nommés (LLM interchangeables)
-├── 06-data/                 # personnalite/, sagesse/, cours-techniques/, cours-webmarketing/, memoire/
+├── 06-data/                 # personnalite/ (dont valeurs.md), sagesse/, cours-techniques/, cours-webmarketing/, memoire/
 ├── logs/
 └── start.sh
 ```

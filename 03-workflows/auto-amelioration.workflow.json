@@ -1,0 +1,63 @@
+{
+  "name": "auto-amelioration",
+  "description": "Propose une amélioration de skill/workflow en tenant compte des valeurs et de l'historique d'erreurs, puis l'applique réellement via auto-implementer.js si la vérification déterministe passe.",
+  "version": "1.0.0",
+  "inputs": {
+    "contexte": { "type": "string", "default": "", "description": "Pourquoi ce cycle est lancé (ex. la leçon qui vient d'être écrite, ou vide si demande explicite)." }
+  },
+  "steps": [
+    {
+      "id": "consulter-erreurs-recentes",
+      "agent": { "type": "subagent", "instructions": "Exécute `node 04-scripts/errors-cli.js prompt-context --hours 24` et retourne le résultat tel quel." },
+      "outputs": { "contexte_erreurs": "$.result" }
+    },
+    {
+      "id": "consulter-valeurs",
+      "agent": { "type": "subagent", "instructions": "Lis 06-data/personnalite/valeurs.md et résume les principes à respecter pour toute auto-modification." },
+      "outputs": { "valeurs": "$.result" }
+    },
+    {
+      "id": "proposer",
+      "agent": {
+        "type": "subagent",
+        "skill": "skill-ameliorateur",
+        "instructions": "Propose une amélioration de skill ou de workflow, en respectant le périmètre et le format JSON exacts de ton skill. Contexte du déclenchement : {{contexte}}\n\n{{contexte_erreurs}}\n\nValeurs à respecter : {{valeurs}}"
+      },
+      "outputs": { "proposition": "$.result" }
+    },
+    {
+      "id": "evaluer-alignement",
+      "condition": "proposition.modifications is not empty",
+      "agent": {
+        "type": "subagent",
+        "skill": "skill-evaluateur",
+        "instructions": "Évalue cette proposition d'auto-modification, en incluant explicitement le critère harmonie/sagesse (voir ta consigne sur ce cas particulier).",
+        "inputs": { "proposition": "{{proposition}}" }
+      },
+      "outputs": { "evaluation": "$.result" }
+    },
+    {
+      "id": "appliquer",
+      "condition": "proposition.modifications is not empty and evaluation.score_global >= 6",
+      "agent": {
+        "type": "subagent",
+        "instructions": "Écris le contenu de {{proposition}} dans un fichier JSON temporaire, puis exécute `node 04-scripts/auto-implementer.js --proposition-file <ce-fichier>`. Retourne le résultat tel quel (statut FUSIONNEE, REJETEE, ou REJETEE_APRES_VERIFICATION)."
+      },
+      "outputs": { "resultat_implementation": "$.result" }
+    },
+    {
+      "id": "consigner",
+      "condition": "resultat_implementation is not empty",
+      "agent": {
+        "type": "subagent",
+        "instructions": "Exécute `node 04-scripts/memoire-cli.js set --type auto-implementation --contenu \"...\" --tags cycle-auto-amelioration` avec un résumé du résultat (statut, fichiers touchés ou branche conservée)."
+      },
+      "outputs": { "memoire_consignee": "$.result" }
+    }
+  ],
+  "output": {
+    "proposition": "$.proposer.proposition",
+    "evaluation": "$.evaluer-alignement.evaluation",
+    "resultat": "$.appliquer.resultat_implementation"
+  }
+}

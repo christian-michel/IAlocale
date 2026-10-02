@@ -1,0 +1,30 @@
+# Fichiers générés à l'exécution — jamais la source du projet, jamais à
+# committer. Leur absence ici est un vrai bug trouvé en testant
+# auto-implementer.js : sans ce fichier, le moindre log écrit par
+# n'importe quel script rend l'arbre de travail "sale" en permanence, ce
+# qui bloquerait le garde-fou "arbre propre requis" d'auto-implementer.js
+# dès le premier lancement de start.sh.
+
+# Journal structuré (dsh-logger.js) — grossit à chaque exécution.
+logs/
+
+# Index RAG régénéré automatiquement par watch-knowledge-base.js.
+06-data/meta-index.json
+
+# Mémoire structurée de l'agent (memoire-cli.js) — état d'exécution,
+# propre à chaque machine, pas du code versionné.
+06-data/memoire/
+
+# PID du watcher, écrit par start.sh le temps de la session.
+04-scripts/watcher.pid
+
+# Dépôts externes clonés par install-plugins.sh (agentic-research,
+# dsh-find-plugins) — pas du code de ce projet, et parfois des dépôts git
+# imbriqués que git ne sait pas suivre proprement de toute façon.
+02-plugins/
+
+# Mac Mini cible.
+.DS_Store
+
+# Au cas où un outil futur ajoute un package.json local.
+node_modules/
