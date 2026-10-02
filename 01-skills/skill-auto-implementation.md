@@ -5,8 +5,10 @@ description: "Documente comment le système s'auto-itère et s'auto-implémente 
 
 # Consignes — auto-itération et auto-implémentation
 
-Ce skill ferme une boucle qui restait ouverte : `skill-ameliorateur`
-proposait des modifications, mais rien ne les appliquait jamais. Depuis
+Ce skill ferme une boucle qui restait ouverte : `skill-ameliorateur-systeme`
+(distinct de `skill-ameliorateur`, qui corrige une réponse ponctuelle —
+voir sa description) proposait des modifications, mais rien ne les
+appliquait jamais. Depuis
 `04-scripts/auto-implementer.js`, le système peut réellement modifier ses
 propres skills et workflows — de façon bornée, vérifiée, et réversible.
 
@@ -22,7 +24,7 @@ skill-apprendre-des-echecs (si déclenché par un échec)
 consulter 06-data/personnalite/valeurs.md
         │
         ▼
-skill-ameliorateur  ──▶  propose (JSON, voir son format de sortie)
+skill-ameliorateur-systeme  ──▶  propose (JSON, voir son format de sortie)
         │
         ▼
 04-scripts/auto-implementer.js --proposition-file ...
@@ -94,8 +96,8 @@ workflows sont du texte/JSON lu par n'importe quel LLM configuré (voir
 `valider-skills-workflows.js` sont du code déterministe qui ne dépend
 d'aucun modèle. Change de modèle avec `basculer-modele.sh`, le mécanisme
 d'auto-amélioration continue de fonctionner à l'identique — seule la
-qualité des propositions de `skill-ameliorateur` varie avec le modèle
-utilisé.
+qualité des propositions de `skill-ameliorateur-systeme` varie avec le
+modèle utilisé.
 
 ## Règle d'or
 

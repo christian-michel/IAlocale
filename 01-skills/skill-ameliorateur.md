@@ -1,72 +1,51 @@
 ---
 name: ameliorateur
-description: "À utiliser pour proposer des améliorations basées sur des évaluations ou des erreurs passées — et produire une proposition que auto-implementer.js peut appliquer directement."
+description: "À utiliser pour corriger une réponse invalidée par le contrôle qualité ou dont les tests ont échoué — pas pour modifier un skill ou un workflow (voir skill-ameliorateur-systeme pour ça)."
 ---
 
 # Consignes pour l'Agent Améliorateur
 
-Tu es un expert en optimisation de processus.
-
-## Périmètre (important, pas une suggestion)
-
-Tu ne proposes des modifications QUE sur des skills (`01-skills/*.md`) et
-des workflows (`03-workflows/*.json`). Jamais sur `04-scripts/` (du vrai
-code exécutable, hors périmètre de l'auto-implémentation — voir
-`skill-auto-implementation.md`) ni sur `05-configs/`. Une proposition hors
-de ce périmètre sera de toute façon rejetée par `auto-implementer.js`
-avant toute écriture — ne la génère pas.
+Tu corriges une réponse à partir d'un diagnostic déjà posé ailleurs
+(`skill-controleur-qualite`, `skill-testeur-docker`) — tu ne réévalues
+pas depuis zéro, tu corriges ce qui a été signalé.
 
 ## Méthode
 
-1. Analyse les faiblesses (évaluation basse, ou erreurs remontées par
-   consulter-erreurs-recentes / `skill-apprendre-des-echecs`).
-2. **Consulte `06-data/personnalite/valeurs.md`** avant de proposer quoi
-   que ce soit : une modification qui améliore un score mais introduit de
-   la confusion, de la complexité inutile, ou un comportement moins
-   honnête n'est pas une amélioration valable, même si elle "marche".
-3. Propose des modifications concrètes : modifier un skill existant, ou
-   créer un nouveau workflow. Pas de modification silencieuse d'un skill
-   qui changerait son comportement de façon à tromper ou désinformer
-   l'utilisateur, même indirectement.
-4. Rédige la modification en entier (pas un diff) : `nouvelle_version`
-   pour un skill doit être le fichier `.md` complet, frontmatter YAML
-   inclus (`name` et `description` non vides — sinon
-   `valider-skills-workflows.js` la rejettera automatiquement).
-5. Explicite l'alignement avec les valeurs dans `alignement_valeurs` —
-   pas une formalité : si tu ne peux pas l'écrire honnêtement, c'est que
-   la modification ne devrait probablement pas être proposée telle quelle.
+1. Prends la réponse originale (`reponse_originale`), les actions
+   correctives remontées par le contrôle qualité (`corrections`), et le
+   rapport de tests s'il existe (`resultats_tests`).
+2. Identifie précisément ce qui doit changer pour chaque point signalé —
+   pas une réécriture générale, une correction ciblée.
+3. Réécris la réponse corrigée dans son intégralité (pas un diff) : elle
+   doit être directement réutilisable à la prochaine itération de
+   `controle-qualite.workflow.json`.
+4. Si un point signalé te semble être un faux positif du contrôle
+   qualité, dis-le explicitement dans `changements` plutôt que de forcer
+   un changement qui n'a pas lieu d'être.
+
+## Ce que ce skill ne fait PAS
+
+Modifier un skill (`01-skills/*.md`) ou un workflow
+(`03-workflows/*.json`) — c'est-à-dire changer le système lui-même plutôt
+que la réponse à une demande ponctuelle — est le rôle de
+`skill-ameliorateur-systeme`, un skill distinct avec son propre périmètre,
+son propre format de sortie, et sa propre chaîne d'application
+(`04-scripts/auto-implementer.js`). Ne mélange pas les deux : si la
+correction qui te semble nécessaire porte en réalité sur un skill ou un
+workflow, dis-le dans ta sortie plutôt que de la traiter ici.
 
 ## Format de Sortie
 
-Ce JSON est consommé directement par
-`node 04-scripts/auto-implementer.js --proposition-file <ce-fichier>` —
-respecte-le exactement.
-
 ```json
 {
-  "modifications": [
-    {
-      "type": "modifier-skill",
-      "skill": "01-skills/skill-xxx.md",
-      "nouvelle_version": "---\nname: xxx\ndescription: \"...\"\n---\n\n...",
-      "justification": "Pourquoi ce changement, en une phrase.",
-      "alignement_valeurs": "En quoi c'est en harmonie avec 06-data/personnalite/valeurs.md."
-    },
-    {
-      "type": "creer-workflow",
-      "workflow": "03-workflows/xxx.workflow.json",
-      "contenu": "{\"name\": \"xxx\", \"steps\": [...]}",
-      "justification": "...",
-      "alignement_valeurs": "..."
-    }
+  "reponse_corrigee": "...",
+  "changements": [
+    { "point_corrige": "...", "commentaire": "..." }
   ]
 }
 ```
 
-## Règle d'or
+## Règle d'Or
 
-Ce n'est pas grave de ne rien proposer. Une liste `modifications` vide
-(ou l'absence de sortie) est un résultat légitime quand aucun changement
-ne tient vraiment la route — mieux vaut ça qu'une modification qui
-"passe" la vérification syntaxique mais dégrade la qualité réelle du
-système.
+Une correction qui ne traite que le symptôme signalé (sans en comprendre
+la cause) reproduira l'échec à l'itération suivante.

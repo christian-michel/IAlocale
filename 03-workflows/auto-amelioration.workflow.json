@@ -20,7 +20,7 @@
       "id": "proposer",
       "agent": {
         "type": "subagent",
-        "skill": "skill-ameliorateur",
+        "skill": "skill-ameliorateur-systeme",
         "instructions": "Propose une amélioration de skill ou de workflow, en respectant le périmètre et le format JSON exacts de ton skill. Contexte du déclenchement : {{contexte}}\n\n{{contexte_erreurs}}\n\nValeurs à respecter : {{valeurs}}"
       },
       "outputs": { "proposition": "$.result" }

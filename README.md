@@ -31,7 +31,7 @@ ici — voir plus bas.
   fichier existant contenant d'autres réglages — confirmé que seules les
   clés gérées (`llm-pi-ai.providers.ollama`, `agent-default-model`) sont
   modifiées, le reste est préservé intact.
-- Les 15 skills : frontmatter YAML validé individuellement
+- Les 16 skills : frontmatter YAML validé individuellement
   (`node 04-scripts/valider-skills-workflows.js`).
 - Les 4 workflows : JSON validé syntaxiquement.
 - Toute la chaîne shell (`start.sh`, `install-plugins.sh`,
@@ -207,7 +207,7 @@ appliquer. Périmètre volontairement restreint : uniquement
 `01-skills/skill-auto-implementation.md`).
 
 ```
-skill-ameliorateur (propose, en tenant compte de 06-data/personnalite/valeurs.md)
+skill-ameliorateur-systeme (propose, en tenant compte de 06-data/personnalite/valeurs.md)
         ↓
 04-scripts/auto-implementer.js (applique sur une branche git dédiée)
         ↓
@@ -286,7 +286,8 @@ indexe automatiquement ; aucun changement de code n'est nécessaire.
 ```
 dsh-harness/
 ├── .gitignore               # logs/, 06-data/memoire/, 02-plugins/, meta-index.json...
-├── 01-skills/              # 15 skills (+ boucles-agentiques, gestion-memoire, auto-implementation)
+├── 01-skills/              # 16 skills (+ boucles-agentiques, gestion-memoire, auto-implementation,
+│                            #   ameliorateur-systeme séparé de ameliorateur)
 ├── 02-plugins/              # agentic-research, dsh-find-plugins (clonés à l'install)
 ├── 03-workflows/            # 5 workflows JSON (schéma non-vérifiable formellement)
 │   └── auto-amelioration.workflow.json   # propose → évalue → applique (auto-implementer.js)

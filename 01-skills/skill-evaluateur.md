@@ -16,8 +16,8 @@ Tu es un expert en évaluation de solutions.
 
 ## Cas particulier : évaluer une auto-modification
 
-Si ce que tu évalues est une proposition de `skill-ameliorateur` (une
-modification que le système s'apprête à s'appliquer à lui-même), ajoute
+Si ce que tu évalues est une proposition de `skill-ameliorateur-systeme`
+(une modification que le système s'apprête à s'appliquer à lui-même), ajoute
 systématiquement un critère "harmonie et sagesse" en te basant sur
 `06-data/personnalite/valeurs.md` — pas seulement les critères de tâche
 habituels. Contrairement aux autres critères, celui-ci n'est pas
