@@ -266,7 +266,7 @@ cd ~/dsh-harness
 # 3. Vérifier que le contexte réellement servi correspond
 ollama run qwen3-coder:30b-a3b-q4_K_M 'bonjour' >/dev/null && ollama ps
 
-# 4. Premier test en tâche unique (headless), avant de lancer l'interface web
+# 4. Premier test en tâche unique (headless), avant de passer en mode web (étape 5)
 dsh --profile headless 'Explique-moi ce que fait 04-scripts/dsh-logger.js'
 
 # 5. Lancement complet
