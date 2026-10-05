@@ -47,14 +47,21 @@ ici — voir plus bas.
 - `basculer-modele.sh` : résolution de profil (`05-configs/modeles.yaml`)
   testée, y compris profil inconnu ; délégation à `setup-local-model.sh`
   confirmée jusqu'au point où Ollama devient nécessaire.
-- `decision-rapide.js` : testé contre un faux serveur Ollama (module
-  `http` natif) rejouant la forme exacte de `/api/chat` documentée par
-  Ollama — 7 scénarios couverts (oui-non, choix+justification, note sous
-  le seuil de confiance, violation de schéma par le modèle, erreur HTTP,
-  réponse non-JSON, modèle auto-détecté depuis `~/.dsh/settings.yaml`).
-  Le comportement contre un VRAI Ollama (un vrai modèle respecte-t-il
-  bien la contrainte de schéma en pratique ?) reste à confirmer sur ta
-  machine.
+- `decision-rapide.js`, moteur `ollama` : testé contre un faux serveur
+  Ollama (module `http` natif) rejouant la forme exacte de `/api/chat`
+  documentée par Ollama — 7 scénarios couverts (oui-non,
+  choix+justification, note sous le seuil de confiance, violation de
+  schéma par le modèle, erreur HTTP, réponse non-JSON, modèle
+  auto-détecté depuis `~/.dsh/settings.yaml`), revérifiés sans régression
+  après le refactoring pour le moteur `laya`. Le comportement contre un
+  VRAI Ollama (un vrai modèle respecte-t-il bien la contrainte de schéma
+  en pratique ?) reste à confirmer sur ta machine.
+- `decision-rapide.js`, moteur `laya` : ses deux garde-fous testés
+  réellement (type `note` refusé proprement, paquet non installé détecté
+  et signalé proprement). La décision elle-même (l'appel à
+  `Laya.load`/`systemOne`) n'a pas pu être exécutée — voir section
+  "Décision rapide" pour la cause précise (api.nuget.org bloqué dans mon
+  environnement).
 - `identifier-meilleur` + `decision-rapide.js` ensemble : 3 scénarios de
   bout en bout sur trois domaines différents (code, juridique, comptable
   — voir section "Décision rapide"), y compris le cas où la confiance est
@@ -233,6 +240,23 @@ génération complète ET le coût du catalogue d'outils de `dsh` (voir
 telle (`fiable: false`, code de sortie 2) plutôt que d'être utilisée en
 confiance — à l'appelant d'escalader vers un skill délibératif complet
 dans ce cas. Voir `01-skills/skill-decision-rapide.md` pour la méthode.
+
+**Deux moteurs** (`--moteur ollama|laya`, `ollama` par défaut) : le gros
+modèle déjà configuré, ou [Laya](https://github.com/receptron/laya)
+(Convai Innovations, Apache 2.0) — concurrent open source de JEV, un
+encodeur dédié de 421M de paramètres (~2 Go de RAM) qui tourne à côté du
+gros modèle sans lui disputer la RAM. Nécessite `npm install` (seule
+dépendance npm de ce dépôt, volontairement optionnelle). **Non exécuté
+dans mon environnement** : `onnxruntime-node` (dépendance de Laya)
+télécharge son binaire natif depuis `api.nuget.org` à l'installation —
+host bloqué par le proxy réseau de mon bac à sable (confirmé dans son
+propre journal d'échecs), sans rapport probable avec un réseau
+domestique normal, mais à vérifier si `npm install` échoue chez toi
+aussi. Limites connues : pas de mesure de confiance pour le type `note`
+(refusé avec ce moteur), qualité en français non vérifiée (benchmarks
+publiés tous anglophones), pas de serveur persistant (chaque appel
+recharge le modèle, ~2 Go — voir `detail_timing` dans la sortie JSON).
+Détails dans `01-skills/skill-decision-rapide.md`.
 
 **Branché dans `identifier-meilleur`**
 (`systeme-auto-ameliorant-avec-controle.workflow.json`) : choisir le
@@ -414,6 +438,7 @@ indexe automatiquement ; aucun changement de code n'est nécessaire.
 ```
 dsh-harness/
 ├── .gitignore               # logs/, 06-data/memoire/, 02-plugins/, meta-index.json...
+├── package.json              # seule dépendance npm : @receptron/laya, optionnelle (moteur laya de decision-rapide.js)
 ├── 01-skills/              # 18 skills (+ boucles-agentiques, gestion-memoire, auto-implementation,
 │                            #   ameliorateur-systeme séparé de ameliorateur, decision-rapide,
 │                            #   controleur-de-controle)

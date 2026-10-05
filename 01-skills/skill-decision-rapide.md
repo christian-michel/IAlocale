@@ -7,11 +7,21 @@ description: "À consulter avant de faire appel à un skill délibératif pour u
 
 `04-scripts/decision-rapide.js` reproduit localement l'idée de JEV
 (TypeSafe AI, "System One Model") : pour une question **fermée**, pas
-besoin de faire générer une réponse complète par l'agent — un appel
-direct et contraint à Ollama (`/api/chat` avec `format` en JSON Schema)
-suffit, et c'est nettement plus rapide. JEV lui-même est un service cloud
-payant, non local (voir README, section "Auto-itération") ; ce script en
-reproduit le principe entièrement en local, sans rien payer.
+besoin de faire générer une réponse complète par l'agent. JEV lui-même
+est un service cloud payant, non local (voir README, section
+"Auto-itération") ; ce script en reproduit le principe entièrement en
+local, sans rien payer — avec deux moteurs au choix (`--moteur`) :
+
+- **`ollama`** (défaut) : appel direct et contraint au gros modèle déjà
+  configuré (`/api/chat`, sortie forcée par JSON Schema). N'ajoute aucune
+  dépendance.
+- **`laya`** : [Laya](https://github.com/receptron/laya) (Convai
+  Innovations, Apache 2.0), un encodeur dédié de 421M de paramètres
+  (~2 Go de RAM) qui tourne à côté du gros modèle sans lui disputer la
+  RAM — concurrent open source de JEV. Nécessite `npm install` (seule
+  dépendance npm de ce dépôt, volontairement optionnelle — voir
+  `package.json`). Supporte `oui-non` et `choix` seulement : le type
+  `note` est refusé avec ce moteur (voir "Limites" plus bas).
 
 ## Quand l'utiliser, quand ne PAS l'utiliser
 
@@ -43,9 +53,13 @@ retenu), `note` (`--echelle "0,10"` par défaut). `--avec-justification`
 ajoute une phrase d'explication (plus lent — n'ajoute cette option que si
 l'appelant va réellement lire la justification).
 
-Le modèle utilisé est celui déclaré dans `~/.dsh/settings.yaml`
-(`agent-default-model`, donc celui que `basculer-modele.sh` a configuré
-en dernier) sauf si `--modele` est passé explicitement.
+Le modèle utilisé (moteur `ollama`) est celui déclaré dans
+`~/.dsh/settings.yaml` (`agent-default-model`, donc celui que
+`basculer-modele.sh` a configuré en dernier) sauf si `--modele` est passé
+explicitement. Pour le moteur `laya`, ajoute `--moteur laya` ; `--multilingue`
+bascule sur le checkpoint multilingue de Laya plutôt que l'anglophone par
+défaut (voir "Limites" — la qualité en français n'est vérifiée dans
+aucun des deux cas).
 
 ## Lire le résultat (dernière ligne de stdout, JSON)
 
@@ -93,9 +107,34 @@ une étape sans pouvoir vérifier l'effet sur `dsh` en conditions réelles
 vérifiable") serait plus risqué qu'utile. Demande l'intégration d'un cas
 précis plutôt qu'une bascule générale.
 
+## Limites du moteur `laya`
+
+- **Non exécuté dans mon environnement** — pas faute d'avoir essayé :
+  `npm install` y échoue précisément parce que la dépendance
+  `onnxruntime-node` télécharge son binaire natif depuis le flux Nuget
+  (`api.nuget.org`) au moment de l'installation, pas depuis npm, et ce
+  host est bloqué par le proxy réseau de mon bac à sable (confirmé dans
+  son propre journal d'échecs). Rien n'indique que ce sera le cas sur un
+  réseau domestique normal — mais si `npm install` échoue avec une erreur
+  réseau sur `onnxruntime-node` chez toi aussi, vérifie `api.nuget.org`
+  avant de chercher ailleurs.
+- **Type `note` non supporté** : le type `score` de Laya ne documente pas
+  de mesure de confiance (contrairement à `choice` et son champ
+  `probabilities`) — plutôt que d'inventer une valeur, ce type est refusé
+  avec ce moteur.
+- **Qualité en français non vérifiée** : les benchmarks publiés par Laya
+  sont tous sur des jeux de données anglophones. `--multilingue` change
+  de checkpoint mais ne garantit rien — à évaluer toi-même avant de t'y
+  fier pour du contenu en français.
+- **Pas de serveur persistant** : contrairement à Ollama (démon qui garde
+  le modèle chargé), chaque appel à `--moteur laya` recharge le modèle
+  depuis son cache (~2 Go lus). `detail_timing` dans la sortie JSON
+  sépare `chargement_ms` de `decision_ms` pour que ce coût reste visible
+  plutôt que caché dans un `duree_ms` global trompeur.
+
 ## Règle d'or
 
 Une décision rapide qui se trompe silencieusement coûte plus cher que le
 temps qu'elle a fait gagner. Le seuil de confiance et la vérification
 post-hoc du schéma ne sont pas des détails d'implémentation : c'est ce
-qui rend ce mécanisme sûr à utiliser.
+qui rend ce mécanisme sûr à utiliser — pour les deux moteurs.

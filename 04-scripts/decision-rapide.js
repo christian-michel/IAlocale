@@ -5,44 +5,66 @@
  * JEV lui-même est un service cloud payant (non local, voir README section
  * "Auto-itération"), mais son idée se reproduit entièrement en local : pour
  * une question FERMÉE (oui/non, choix dans une liste, note chiffrée), pas
- * besoin de faire générer une réponse complète par un modèle — un appel
- * contraint (sortie JSON forcée via le paramètre `format` de l'API Ollama,
- * `options.temperature: 0`, `num_predict` bas) suffit, et c'est nettement
- * plus rapide qu'un tour complet de génération libre.
+ * besoin de faire générer une réponse complète par un modèle.
  *
- * Appelle directement l'API native d'Ollama (`/api/chat`), PAS `dsh` :
- * ça évite aussi le coût caché du catalogue d'outils de l'agent (voir
- * README, section "Optimisation Mac Mini M4", ~14 700 tokens de schémas
- * d'outils pour une tâche triviale) — pour une décision fermée, cet appel
- * n'a besoin d'aucun outil.
+ * Deux moteurs, choisis avec --moteur :
  *
- * ⚠️ Non testé contre un vrai Ollama (absent de mon environnement) : le
- * format de requête/réponse vient de la documentation officielle Ollama
- * (format `format` en JSON Schema sur /api/chat, stable depuis la 0.5),
- * mais le comportement réel d'un modèle précis face à la contrainte de
- * schéma — respecte-t-il toujours l'enum, la plage de la note ? — n'est
- * vérifiable que sur la machine cible. Ce script vérifie lui-même après
- * coup que la réponse respecte bien ce qui a été demandé (voir
- * validerDecision) plutôt que de faire confiance aveuglément au modèle.
+ *   - "ollama" (défaut) : appel contraint au gros modèle déjà configuré
+ *     (sortie forcée par JSON Schema via `/api/chat`, température 0).
+ *     N'ajoute aucune dépendance, mais sollicite le même modèle qui sert
+ *     aussi à générer — voir README, section "Décision rapide".
+ *
+ *   - "laya" : Laya (Convai Innovations, Apache 2.0), un encodeur dédié de
+ *     421M de paramètres (~2 Go de RAM), gratuit et local, qui tourne à
+ *     côté du gros modèle sans lui disputer la RAM. Nécessite
+ *     `npm install` (voir package.json — seule dépendance npm de ce
+ *     dépôt, volontairement optionnelle). Supporte uniquement oui-non et
+ *     choix pour l'instant : le type "score" de Laya ne renvoie pas de
+ *     mesure de confiance confirmée dans sa documentation, donc --type
+ *     note est refusé avec ce moteur plutôt que d'inventer une confiance.
+ *     Qualité en français NON VÉRIFIÉE (benchmarks publiés tous
+ *     anglophones) — voir --multilingue, qui change de checkpoint sans
+ *     garantir le résultat.
+ *
+ * Dans les deux cas : appel direct, PAS par `dsh` — évite le coût caché
+ * du catalogue d'outils de l'agent (voir README, "Optimisation Mac Mini
+ * M4", ~14 700 tokens de schémas d'outils pour une tâche triviale).
+ *
+ * ⚠️ Moteur "ollama" non testé contre un vrai Ollama (absent de mon
+ * environnement) — voir la validation post-hoc (validerDecision) plutôt
+ * que la confiance aveugle au modèle. Moteur "laya" non exécuté non plus,
+ * mais pour une raison précise et vérifiée (pas juste "pas essayé") :
+ * `npm install` échoue ici car la dépendance `onnxruntime-node` télécharge
+ * son binaire natif depuis le flux Nuget (api.nuget.org) au moment de
+ * l'installation — pas depuis npm — et ce host est bloqué par le proxy
+ * réseau de mon environnement (confirmé dans son propre journal
+ * d'échecs). Rien n'indique que ce sera aussi le cas sur un réseau
+ * domestique normal, mais si `npm install` échoue avec une erreur réseau
+ * sur `onnxruntime-node`, vérifie que api.nuget.org est bien joignable
+ * avant de chercher ailleurs. L'API utilisée (Laya.load / systemOne /
+ * types noul·choice) vient de la documentation du projet
+ * (github.com/receptron/laya), vérifiée textuellement à deux reprises
+ * mais jamais exécutée.
  *
  * Usage :
  *   node decision-rapide.js --question "..." --type oui-non|choix|note
+ *                            [--moteur ollama|laya]
  *                            [--contexte "..."] [--choix "a,b,c"]
  *                            [--echelle "0,10"] [--avec-justification]
  *                            [--seuil-confiance 0.6] [--modele <id>]
  *                            [--base-url http://127.0.0.1:11434]
- *                            [--composant decision-rapide]
+ *                            [--multilingue] [--composant decision-rapide]
  *
  * Sortie (dernière ligne de stdout) :
- *   { "decision": ..., "confiance": 0-1, "fiable": bool,
+ *   { "decision": ..., "confiance": 0-1, "fiable": bool, "moteur": "...",
  *     "justification": "..." (si demandé), "duree_ms": N, "modele": "..." }
  *
  * Code de sortie : 0 = décision rendue (fiable, ou pas de seuil demandé) ;
  *   2 = décision rendue mais confiance sous --seuil-confiance (à
  *       l'appelant de décider d'escalader vers un skill délibératif
  *       complet plutôt que de faire confiance à cette réponse rapide) ;
- *   1 = échec réel (Ollama injoignable, réponse hors schéma, arguments
- *       invalides).
+ *   1 = échec réel (moteur injoignable/non installé, réponse hors
+ *       schéma, arguments invalides).
  */
 import { existsSync } from 'fs';
 import path from 'path';
@@ -52,6 +74,7 @@ import { logInfo, logWarning, logError } from './dsh-logger.js';
 
 const COMPOSANT_DEFAUT = 'decision-rapide';
 const TYPES_VALIDES = ['oui-non', 'choix', 'note'];
+const MOTEURS_VALIDES = ['ollama', 'laya'];
 
 function parseArgs(argv) {
   const args = {};
@@ -83,40 +106,10 @@ print((data.get('agent-default-model') or {}).get('model') or '')
   return modele || null;
 }
 
-function construireSchema({ type, choix, echelleMin, echelleMax, avecJustification }) {
-  const proprietes = {};
-  const requis = ['decision', 'confiance'];
-  if (type === 'oui-non') {
-    proprietes.decision = { type: 'boolean' };
-  } else if (type === 'choix') {
-    proprietes.decision = { type: 'string', enum: choix };
-  } else {
-    proprietes.decision = { type: 'number', minimum: echelleMin, maximum: echelleMax };
-  }
-  proprietes.confiance = { type: 'number', minimum: 0, maximum: 1 };
-  if (avecJustification) {
-    proprietes.justification = { type: 'string' };
-    requis.push('justification');
-  }
-  return { type: 'object', properties: proprietes, required: requis };
-}
-
-function construirePrompt({ question, contexte, type, choix, echelleMin, echelleMax, avecJustification }) {
-  const lignes = [
-    `Réponds uniquement par la décision demandée${avecJustification ? ', avec une justification d’une phrase' : ', sans explication ni commentaire'}.`,
-    `Question : ${question}`,
-  ];
-  if (type === 'choix') lignes.push(`Choix possibles (un seul, exactement comme écrit) : ${choix.join(', ')}`);
-  if (type === 'note') lignes.push(`Donne une note entre ${echelleMin} et ${echelleMax}.`);
-  lignes.push('Indique aussi ta confiance dans cette décision, entre 0 (incertain) et 1 (certain).');
-  if (contexte) lignes.push(`\nContexte :\n${contexte}`);
-  return lignes.join('\n');
-}
-
 /** Vérifie après coup que la décision respecte vraiment ce qui a été
- * demandé — un petit modèle local peut s'écarter du schéma malgré la
- * contrainte (ex. renvoyer un choix hors de la liste). Ne fait jamais
- * confiance aveuglément à "le format JSON était valide". */
+ * demandé — un petit modèle/encodeur peut s'écarter de la contrainte
+ * (ex. renvoyer un choix hors de la liste). Ne fait jamais confiance
+ * aveuglément à "le format était valide", quel que soit le moteur. */
 function validerDecision(decisionBrute, { type, choix, echelleMin, echelleMax }) {
   if (typeof decisionBrute.confiance !== 'number' || decisionBrute.confiance < 0 || decisionBrute.confiance > 1) {
     return `confiance hors de [0,1] ou absente : ${JSON.stringify(decisionBrute.confiance)}`;
@@ -136,34 +129,48 @@ function validerDecision(decisionBrute, { type, choix, echelleMin, echelleMax })
   return null;
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const composant = typeof args.composant === 'string' ? args.composant : COMPOSANT_DEFAUT;
+// --- Moteur "ollama" ------------------------------------------------------
 
-  if (!args.question || args.question === true || !TYPES_VALIDES.includes(args.type)) {
-    console.error(`Usage : --question "..." --type ${TYPES_VALIDES.join('|')} [--contexte "..."] [--choix "a,b,c"] [--echelle "0,10"] [--avec-justification] [--seuil-confiance 0.6] [--modele <id>] [--base-url http://127.0.0.1:11434]`);
-    process.exit(1);
+function construireSchemaOllama({ type, choix, echelleMin, echelleMax, avecJustification }) {
+  const proprietes = {};
+  const requis = ['decision', 'confiance'];
+  if (type === 'oui-non') {
+    proprietes.decision = { type: 'boolean' };
+  } else if (type === 'choix') {
+    proprietes.decision = { type: 'string', enum: choix };
+  } else {
+    proprietes.decision = { type: 'number', minimum: echelleMin, maximum: echelleMax };
   }
-  const type = args.type;
-  const choix = type === 'choix' ? String(args.choix || '').split(',').map(s => s.trim()).filter(Boolean) : [];
-  if (type === 'choix' && choix.length < 2) {
-    console.error('Usage : --type choix requiert --choix "a,b,c" (au moins deux options)');
-    process.exit(1);
+  proprietes.confiance = { type: 'number', minimum: 0, maximum: 1 };
+  if (avecJustification) {
+    proprietes.justification = { type: 'string' };
+    requis.push('justification');
   }
-  const [echelleMin, echelleMax] = String(args.echelle || '0,10').split(',').map(Number);
-  const avecJustification = Boolean(args['avec-justification']);
-  const seuilConfiance = args['seuil-confiance'] !== undefined ? Number(args['seuil-confiance']) : null;
+  return { type: 'object', properties: proprietes, required: requis };
+}
+
+function construirePromptOllama({ question, contexte, type, choix, echelleMin, echelleMax, avecJustification }) {
+  const lignes = [
+    `Réponds uniquement par la décision demandée${avecJustification ? ', avec une justification d’une phrase' : ', sans explication ni commentaire'}.`,
+    `Question : ${question}`,
+  ];
+  if (type === 'choix') lignes.push(`Choix possibles (un seul, exactement comme écrit) : ${choix.join(', ')}`);
+  if (type === 'note') lignes.push(`Donne une note entre ${echelleMin} et ${echelleMax}.`);
+  lignes.push('Indique aussi ta confiance dans cette décision, entre 0 (incertain) et 1 (certain).');
+  if (contexte) lignes.push(`\nContexte :\n${contexte}`);
+  return lignes.join('\n');
+}
+
+async function decisionViaOllama({ args, composant, type, choix, echelleMin, echelleMax, avecJustification }) {
   const baseUrl = typeof args['base-url'] === 'string' ? args['base-url'] : 'http://127.0.0.1:11434';
   const modele = typeof args.modele === 'string' ? args.modele : lireModeleParDefaut();
-
   if (!modele) {
     console.error('❌ Aucun modèle déclaré : passe --modele, ou configure-en un avec ./04-scripts/basculer-modele.sh.');
     process.exit(1);
   }
 
-  const schema = construireSchema({ type, choix, echelleMin, echelleMax, avecJustification });
-  const prompt = construirePrompt({ question: args.question, contexte: args.contexte, type, choix, echelleMin, echelleMax, avecJustification });
-
+  const schema = construireSchemaOllama({ type, choix, echelleMin, echelleMax, avecJustification });
+  const prompt = construirePromptOllama({ question: args.question, contexte: args.contexte, type, choix, echelleMin, echelleMax, avecJustification });
   const corps = {
     model: modele,
     messages: [{ role: 'user', content: prompt }],
@@ -172,7 +179,7 @@ async function main() {
     options: { temperature: 0, num_predict: avecJustification ? 200 : 60 },
   };
 
-  logInfo(composant, `Décision rapide demandée (type=${type}, modèle=${modele})`);
+  logInfo(composant, `Décision rapide demandée (moteur=ollama, type=${type}, modèle=${modele})`);
   const debut = Date.now();
 
   let reponseHttp;
@@ -211,9 +218,113 @@ async function main() {
     process.exit(1);
   }
 
+  return { decisionBrute, dureeMs, modele };
+}
+
+// --- Moteur "laya" ----------------------------------------------------------
+
+async function decisionViaLaya({ args, composant, type, choix, echelleMin, echelleMax }) {
+  if (type === 'note') {
+    // Le type "score" de Laya renvoie bien un nombre, mais aucune mesure
+    // de confiance associée n'est documentée (contrairement à "choice"
+    // et son champ "probabilities") — plutôt que d'inventer une valeur
+    // de confiance arbitraire, ce type est refusé avec ce moteur.
+    console.error('❌ --type note n\'est pas supporté avec --moteur laya (pas de mesure de confiance confirmée pour son type "score"). Utilise --moteur ollama.');
+    process.exit(1);
+  }
+
+  let LayaModule;
+  try {
+    LayaModule = await import('@receptron/laya');
+  } catch (err) {
+    logError(composant, "Le paquet @receptron/laya n'est pas installé", { err });
+    console.error('❌ @receptron/laya n\'est pas installé. Lance `npm install` à la racine du dépôt, puis réessaie (voir package.json).');
+    process.exit(1);
+  }
+
+  const multilingue = Boolean(args.multilingue);
+  logInfo(composant, `Décision rapide demandée (moteur=laya, type=${type}, checkpoint=${multilingue ? 'multilingual' : 'défaut'})`);
+
+  const debutChargement = Date.now();
+  let laya;
+  try {
+    laya = await LayaModule.Laya.load(multilingue ? { subfolder: 'multilingual' } : undefined);
+  } catch (err) {
+    logError(composant, 'Échec du chargement du modèle Laya', { err });
+    console.error(`❌ Échec du chargement de Laya : ${err.message}`);
+    process.exit(1);
+  }
+  const dureeChargementMs = Date.now() - debutChargement;
+
+  // Une seule question par appel, sous une clé fixe — decision-rapide.js
+  // ne demande jamais plusieurs décisions en une fois.
+  const question = type === 'oui-non'
+    ? { decision: { type: 'noul', instructions: args.question } }
+    : { decision: { type: 'choice', instructions: args.question, criteria: Object.fromEntries(choix.map(c => [c, c])) } };
+  // NB : Laya attend normalement une description par option dans
+  // "criteria" (ex. {billing: "paiements, remboursements..."}) — l'API
+  // actuelle de decision-rapide.js ne transporte que des libellés plats
+  // (--choix "a,b,c"), donc chaque option se décrit ici par elle-même.
+  // Une vraie description par option demanderait d'étendre le CLI.
+
+  const debutDecision = Date.now();
+  let resultat;
+  try {
+    resultat = await laya.systemOne({ contexte: args.contexte || '' }, question);
+  } catch (err) {
+    logError(composant, 'Échec de la décision Laya', { err });
+    console.error(`❌ Échec de la décision Laya : ${err.message}`);
+    try { await laya.close(); } catch { /* déjà en échec, rien de plus à faire */ }
+    process.exit(1);
+  }
+  const dureeDecisionMs = Date.now() - debutDecision;
+  await laya.close();
+
+  let decisionBrute;
+  if (type === 'oui-non') {
+    const p = resultat.answers.decision.noul;
+    decisionBrute = { decision: p >= 0.5, confiance: p >= 0.5 ? p : 1 - p };
+  } else {
+    const c = resultat.answers.decision.choice;
+    decisionBrute = { decision: c, confiance: resultat.answers.decision.probabilities?.[c] };
+  }
+
+  return {
+    decisionBrute,
+    dureeMs: dureeChargementMs + dureeDecisionMs,
+    modele: 'laya',
+    detailTiming: { chargement_ms: dureeChargementMs, decision_ms: dureeDecisionMs },
+  };
+}
+
+// --- Orchestration ----------------------------------------------------------
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const composant = typeof args.composant === 'string' ? args.composant : COMPOSANT_DEFAUT;
+  const moteur = typeof args.moteur === 'string' ? args.moteur : 'ollama';
+
+  if (!args.question || args.question === true || !TYPES_VALIDES.includes(args.type) || !MOTEURS_VALIDES.includes(moteur)) {
+    console.error(`Usage : --question "..." --type ${TYPES_VALIDES.join('|')} [--moteur ${MOTEURS_VALIDES.join('|')}] [--contexte "..."] [--choix "a,b,c"] [--echelle "0,10"] [--avec-justification] [--seuil-confiance 0.6] [--modele <id>] [--base-url http://127.0.0.1:11434] [--multilingue]`);
+    process.exit(1);
+  }
+  const type = args.type;
+  const choix = type === 'choix' ? String(args.choix || '').split(',').map(s => s.trim()).filter(Boolean) : [];
+  if (type === 'choix' && choix.length < 2) {
+    console.error('Usage : --type choix requiert --choix "a,b,c" (au moins deux options)');
+    process.exit(1);
+  }
+  const [echelleMin, echelleMax] = String(args.echelle || '0,10').split(',').map(Number);
+  const avecJustification = Boolean(args['avec-justification']);
+  const seuilConfiance = args['seuil-confiance'] !== undefined ? Number(args['seuil-confiance']) : null;
+
+  const { decisionBrute, dureeMs, modele, detailTiming } = moteur === 'laya'
+    ? await decisionViaLaya({ args, composant, type, choix, echelleMin, echelleMax })
+    : await decisionViaOllama({ args, composant, type, choix, echelleMin, echelleMax, avecJustification });
+
   const raisonInvalide = validerDecision(decisionBrute, { type, choix, echelleMin, echelleMax });
   if (raisonInvalide) {
-    logError(composant, `Décision reçue mais invalide : ${raisonInvalide}`, { context: { modele, decisionBrute } });
+    logError(composant, `Décision reçue mais invalide : ${raisonInvalide}`, { context: { moteur, modele, decisionBrute } });
     console.error(`❌ ${raisonInvalide}`);
     process.exit(1);
   }
@@ -221,19 +332,21 @@ async function main() {
   const fiable = seuilConfiance === null || decisionBrute.confiance >= seuilConfiance;
   if (!fiable) {
     logWarning(composant, `Confiance ${decisionBrute.confiance} sous le seuil ${seuilConfiance} — décision rendue mais marquée non fiable`, {
-      context: { modele, decision: decisionBrute.decision },
+      context: { moteur, modele, decision: decisionBrute.decision },
     });
   } else {
-    logInfo(composant, `Décision rendue en ${dureeMs}ms (confiance ${decisionBrute.confiance})`);
+    logInfo(composant, `Décision rendue en ${dureeMs}ms (moteur=${moteur}, confiance ${decisionBrute.confiance})`);
   }
 
   const resultat = {
     decision: decisionBrute.decision,
     confiance: decisionBrute.confiance,
     fiable,
+    moteur,
     duree_ms: dureeMs,
     modele,
   };
+  if (detailTiming) resultat.detail_timing = detailTiming;
   if (avecJustification) resultat.justification = decisionBrute.justification;
 
   console.log(JSON.stringify(resultat, null, 2));
