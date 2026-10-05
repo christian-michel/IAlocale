@@ -46,6 +46,10 @@ demande-toi : *qui décide qu'on s'arrête, et sur quelle preuve ?*
   rédaction : une instruction du type "corrige jusqu'à ce que les tests
   passent, avec ces cas de test précis" contient déjà sa propre boucle —
   inutile d'en ajouter une par-dessus si le prompt est assez précis.
+- **Une étape de la boucle est elle-même une question fermée** (oui/non,
+  choix dans une liste, note) → ce n'est pas un appel délibératif complet
+  qu'il te faut, voir `skill-decision-rapide.md` : un ordre de grandeur
+  plus rapide pour exactement ce cas-là.
 
 ## Ce qui n'existe pas (encore) dans dsh
 

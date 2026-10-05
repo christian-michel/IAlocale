@@ -31,9 +31,9 @@ ici — voir plus bas.
   fichier existant contenant d'autres réglages — confirmé que seules les
   clés gérées (`llm-pi-ai.providers.ollama`, `agent-default-model`) sont
   modifiées, le reste est préservé intact.
-- Les 16 skills : frontmatter YAML validé individuellement
+- Les 17 skills : frontmatter YAML validé individuellement
   (`node 04-scripts/valider-skills-workflows.js`).
-- Les 4 workflows : JSON validé syntaxiquement.
+- Les 5 workflows : JSON validé syntaxiquement.
 - Toute la chaîne shell (`start.sh`, `install-plugins.sh`,
   `security-check.sh`) : testée de bout en bout dans un environnement sans
   Docker/Ollama/dsh (le cas réel avant ta première installation) — échoue
@@ -47,6 +47,14 @@ ici — voir plus bas.
 - `basculer-modele.sh` : résolution de profil (`05-configs/modeles.yaml`)
   testée, y compris profil inconnu ; délégation à `setup-local-model.sh`
   confirmée jusqu'au point où Ollama devient nécessaire.
+- `decision-rapide.js` : testé contre un faux serveur Ollama (module
+  `http` natif) rejouant la forme exacte de `/api/chat` documentée par
+  Ollama — 7 scénarios couverts (oui-non, choix+justification, note sous
+  le seuil de confiance, violation de schéma par le modèle, erreur HTTP,
+  réponse non-JSON, modèle auto-détecté depuis `~/.dsh/settings.yaml`).
+  Le comportement contre un VRAI Ollama (un vrai modèle respecte-t-il
+  bien la contrainte de schéma en pratique ?) reste à confirmer sur ta
+  machine.
 
 ## ❌ Non vérifiable dans mon environnement
 
@@ -198,6 +206,23 @@ des entrées typées et taguées, stockées dans
 `01-skills/skill-gestion-memoire.md` pour la méthode et la répartition
 des usages entre les deux mémoires.
 
+## ⚡ Décision rapide (inspiré de JEV)
+
+[JEV](https://simonwillison.net/2026/Sep/21/jev/) (TypeSafe AI) est un
+service cloud payant qui répond vite aux questions fermées (oui/non,
+choix, note) sans générer de texte libre — incompatible tel quel avec la
+contrainte 100% local. `04-scripts/decision-rapide.js` en reproduit le
+principe en local : un appel direct à Ollama (`/api/chat`, sortie
+contrainte par un JSON Schema, température 0), en évitant à la fois une
+génération complète ET le coût du catalogue d'outils de `dsh` (voir
+"Optimisation Mac Mini M4" plus haut). Un seuil de confiance configurable
+(`--seuil-confiance`) fait qu'une décision peu sûre est signalée comme
+telle (`fiable: false`, code de sortie 2) plutôt que d'être utilisée en
+confiance — à l'appelant d'escalader vers un skill délibératif complet
+dans ce cas. Voir `01-skills/skill-decision-rapide.md` pour la méthode et
+les limites (volontairement non rétro-intégré dans les workflows
+existants, faute de pouvoir tester leur comportement réel).
+
 ## 🔄 Auto-itération et auto-implémentation
 
 Le système peut se modifier lui-même — pas seulement proposer, réellement
@@ -286,8 +311,8 @@ indexe automatiquement ; aucun changement de code n'est nécessaire.
 ```
 dsh-harness/
 ├── .gitignore               # logs/, 06-data/memoire/, 02-plugins/, meta-index.json...
-├── 01-skills/              # 16 skills (+ boucles-agentiques, gestion-memoire, auto-implementation,
-│                            #   ameliorateur-systeme séparé de ameliorateur)
+├── 01-skills/              # 17 skills (+ boucles-agentiques, gestion-memoire, auto-implementation,
+│                            #   ameliorateur-systeme séparé de ameliorateur, decision-rapide)
 ├── 02-plugins/              # agentic-research, dsh-find-plugins (clonés à l'install)
 ├── 03-workflows/            # 5 workflows JSON (schéma non-vérifiable formellement)
 │   └── auto-amelioration.workflow.json   # propose → évalue → applique (auto-implementer.js)
@@ -302,6 +327,7 @@ dsh-harness/
 │   ├── basculer-modele.sh    # bascule entre profils de 05-configs/modeles.yaml (testé)
 │   ├── valider-skills-workflows.js  # vérification déterministe skills/workflows (testé)
 │   ├── auto-implementer.js   # applique une proposition sur branche git dédiée (testé)
+│   ├── decision-rapide.js    # décision rapide type JEV, appel Ollama contraint (testé via mock)
 │   ├── security-check.sh
 │   ├── install-plugins.sh    # plugins corrigés (dsh-workflow, dsh-tui, etc.)
 │   └── setup-local-model.sh  # bascule vers Ollama local (testé, fusion YAML)
