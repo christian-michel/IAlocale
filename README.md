@@ -448,6 +448,55 @@ Ce qui reste à vérifier UNIQUEMENT sur la vraie machine : si `dsh`
 engage réellement le pipeline de contrôle qualité en pratique, et si
 les décisions rapides sont bien calibrées avec un vrai modèle.
 
+### Premier passage réel (2026-10-05) — ce qui a été trouvé, corrigé, et ce qui reste ouvert
+
+Trois causes distinctes, pas une panne généralisée :
+
+1. **Section 2 (décision rapide) : "Aucun modèle déclaré" sur les 3 cas.**
+   `decision-rapide.js` lit `agent-default-model` dans
+   `~/.dsh/settings.yaml` — absent si le modèle a été configuré
+   autrement (ex. page "Models" de l'UI web de `dsh`, plutôt que
+   `setup-local-model.sh`/`basculer-modele.sh`). **Corrigé** :
+   `suite-tests-reelle.sh` détecte maintenant un modèle directement via
+   `ollama list` et le passe en `--modele` explicite, indépendamment de
+   ce fichier. Les fichiers `2a/2b/2c-*.json` remontés étaient vides pour
+   une raison annexe, corrigée au passage : ces appels ne redirigeaient
+   pas stderr vers le fichier capturé (`2>&1` manquant), contrairement
+   aux appels `dsh` de la section 3 — le message d'erreur n'était visible
+   qu'au terminal.
+2. **Section 5 (auto-implémentation) : "not a git repository".**
+   `auto-implementer.js` exige un vrai dépôt git (branches/commits/
+   fusions) — impossible dans un dossier qui n'a pas de `.git`. Le nom de
+   dossier observé (`IAlocale-claude-determined-pasteur-50jhkd`) est
+   exactement celui que produit "Download ZIP" sur GitHub, qui n'inclut
+   jamais `.git`. **Corrigé** : message d'erreur maintenant explicite sur
+   cette cause probable et la commande pour vérifier/corriger, plutôt que
+   de laisser remonter le message brut de git.
+   **Action attendue de ton côté** : confirme avec
+   `cd <dossier-du-projet> && git status` — si ça répond "not a git
+   repository", clone proprement avec `git clone` plutôt que de
+   réutiliser ce dossier.
+3. **Section 3 (tests techniques) : réponses de `dsh` hors sujet.** La
+   3a a renvoyé *"Got it. I'll use the available tools..."* (ignore le
+   contenu réel de la demande) ; la 3b a renvoyé une erreur de permission
+   sandbox (*"workspace-write"*) suivie d'un tag `<tool_call>` brut, non
+   interprété. Les deux signalent la même chose : `dsh` n'a pas traité la
+   tâche normalement, et le compteur de la section 4 confirme qu'aucun
+   skill du pipeline (`controleur-qualite`, `decision-rapide`...) ne
+   s'est engagé.
+   **Non corrigé ici** — je n'ai pas assez d'éléments pour distinguer,
+   sans deviner, parmi : (a) un problème de transmission du prompt par
+   `dsh --profile headless "<texte>"` tel que documenté, (b) un modèle
+   actif non configuré pour le format d'appel d'outils qu'attend `dsh`
+   (plusieurs modèles différents de celui prévu sont installés sur cette
+   machine — `qwen3-coder:latest`, `glm-4.7-flash`, `mistral`...), ou
+   (c) un comportement de `dsh` qui ne correspond pas à ce que sa
+   documentation décrit (jamais vérifié directement, voir "Non
+   vérifiable"). Le vocabulaire "workspace-write" ne correspond à rien
+   trouvé dans la documentation de `@deepseek-ai/dsh` consultée jusqu'ici
+   — à vérifier : `which dsh` et `dsh --version` confirment-ils bien le
+   paquet attendu ?
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée

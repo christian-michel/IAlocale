@@ -54,6 +54,21 @@ journal "dsh et Ollama répondent. Modèles disponibles :"
 ollama list | tee -a "$DOSSIER/resume.txt"
 journal ""
 
+# Modèle à passer explicitement à decision-rapide.js : ne pas dépendre de
+# ~/.dsh/settings.yaml (agent-default-model) pour CE script — si le modèle
+# a été configuré autrement (ex. page "Models" de l'UI web de dsh plutôt
+# que setup-local-model.sh/basculer-modele.sh), ce fichier peut ne jamais
+# avoir été écrit, et decision-rapide.js échouerait alors systématiquement
+# avec "Aucun modèle déclaré". On prend simplement le premier modèle que
+# Ollama liste réellement.
+MODELE_DETECTE=$(ollama list | awk 'NR==2 {print $1}')
+if [ -n "$MODELE_DETECTE" ]; then
+    journal "Modèle utilisé pour la section 2 (détecté via 'ollama list') : $MODELE_DETECTE"
+else
+    journal "ATTENTION : aucun modèle détecté via 'ollama list' — la section 2 va probablement échouer."
+fi
+journal ""
+
 # --- 1. Validation syntaxique déterministe ---
 journal "--- 1. Validation syntaxique skills/workflows ---"
 node 04-scripts/valider-skills-workflows.js | tee "$DOSSIER/1-validation-syntaxe.json"
@@ -65,26 +80,26 @@ journal "--- 2. Décision rapide sur 3 domaines (vrai modèle local) ---"
 journal "  2a. Code"
 node 04-scripts/decision-rapide.js \
     --question "Quel index de candidat a le meilleur score global pour une validation email" \
-    --type choix --choix "0,1,2" \
+    --type choix --choix "0,1,2" --modele "$MODELE_DETECTE" \
     --contexte "0: regex simple score 6.5 ; 1: regex et verification MX du domaine score 9.2 ; 2: regex et liste de domaines jetables score 7.8" \
     --seuil-confiance 0.75 --composant test-reel-code \
-    | tee "$DOSSIER/2a-decision-code.json"
+    2>&1 | tee "$DOSSIER/2a-decision-code.json"
 
 journal "  2b. Juridique"
 node 04-scripts/decision-rapide.js \
     --question "Quel index de candidat a le meilleur score global pour une clause de resiliation" \
-    --type choix --choix "0,1" \
+    --type choix --choix "0,1" --modele "$MODELE_DETECTE" \
     --contexte "0: preavis 30 jours ecrit score 7.1 ; 1: preavis 30 jours ecrit et clause de force majeure score 7.4" \
     --seuil-confiance 0.75 --composant test-reel-juridique \
-    | tee "$DOSSIER/2b-decision-juridique.json"
+    2>&1 | tee "$DOSSIER/2b-decision-juridique.json"
 
 journal "  2c. Comptable"
 node 04-scripts/decision-rapide.js \
     --question "Quel index de candidat a le meilleur score global pour une methode d amortissement" \
-    --type choix --choix "0,1,2" --avec-justification \
+    --type choix --choix "0,1,2" --avec-justification --modele "$MODELE_DETECTE" \
     --contexte "0: lineaire score 5.0 ; 1: degressif score 8.8 ; 2: lineaire accelere score 6.2" \
     --seuil-confiance 0.75 --composant test-reel-comptable \
-    | tee "$DOSSIER/2c-decision-comptable.json"
+    2>&1 | tee "$DOSSIER/2c-decision-comptable.json"
 journal ""
 
 # --- 3. Deux tests techniques de bout en bout via dsh ---

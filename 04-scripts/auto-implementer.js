@@ -128,6 +128,23 @@ async function main() {
     console.error('Usage : --proposition-file <chemin.json> [--verification "<commande>"]');
     process.exit(1);
   }
+
+  // Précondition vérifiée en premier, avec un message actionnable : ce
+  // script fait des branches/commits/fusions, impossible sans un vrai
+  // dépôt git. La cause la plus fréquente d'un "not a git repository"
+  // ici n'est pas une erreur d'environnement obscure — c'est que le
+  // dossier vient d'un "Download ZIP" GitHub plutôt que d'un vrai
+  // `git clone` (observé en pratique : le nom de dossier
+  // "<repo>-<branche>" est exactement ce que produit ce bouton).
+  try {
+    git(['rev-parse', '--is-inside-work-tree']);
+  } catch {
+    console.error(`❌ ${RACINE} n'est pas un dépôt git (pas de .git trouvé).`);
+    console.error("   Cause la plus probable : ce dossier vient d'un \"Download ZIP\" sur GitHub plutôt que d'un `git clone` — un ZIP n'inclut jamais le dossier .git.");
+    console.error(`   Vérifie avec : cd ${RACINE} && git status`);
+    console.error('   Si ça confirme le diagnostic, clone proprement le dépôt (`git clone <url>`) plutôt que de réutiliser ce dossier.');
+    process.exit(1);
+  }
   const verification = typeof args.verification === 'string' ? args.verification : VERIFICATION_DEFAUT;
 
   let proposition;
