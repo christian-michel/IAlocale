@@ -498,6 +498,46 @@ panne généralisée :
    — avant de conclure quoi que ce soit, plutôt que de continuer à
    décortiquer la config à l'aveugle.
 
+### Round 3 (test direct lancé) — nouvelle piste sur les réponses hors sujet
+
+Le test suggéré au point 6 a été lancé :
+`dsh --profile headless "Liste les skills que tu as à disposition."`.
+Au lieu d'une liste de skills, la sortie contenait un bloc de texte qui
+ressemble à un prompt interne de **compaction de conversation** — le
+genre de prompt qu'un harnais agentique s'envoie à lui-même en coulisses
+quand le contexte devient trop plein, jamais censé être montré tel quel.
+
+Hypothèse, non confirmée : `@deepseek-ai/dsh-compaction-basic` et
+`@deepseek-ai/dsh-command-compact` sont actifs dans le profil `headless`
+(vus dans `--dump-config`), et la fenêtre de contexte déclarée ici
+(32768, voir "Pourquoi `OLLAMA_CONTEXT_LENGTH` mérite d'être fixé
+explicitement" ci-dessus) est étroite face au coût déjà documenté plus
+bas (~14 700 tokens rien que pour le catalogue d'outils, voir
+"Optimisation pour Mac Mini M4 / 24 Go") — si le déclenchement de la
+compaction est calibré pour des fenêtres bien plus larges (modèles
+cloud, 128k+ couramment), un budget aussi serré pourrait la faire se
+déclencher presque systématiquement. Ça expliquerait aussi, par le même
+mécanisme, les réponses hors sujet des tests 3a/3b (point 5 du round
+précédent, jamais élucidées) : pas une panne de pipeline, mais une
+compaction qui interrompt la tâche avant qu'elle ne commence vraiment.
+
+**Volontairement pas corrigé avant d'avoir confirmé** : augmenter
+`contextWindow`/`OLLAMA_CONTEXT_LENGTH` a un coût RAM réel sur un budget
+déjà serré (24 Go, voir "Optimisation..."), et le corriger à l'aveugle
+sur une hypothèse non vérifiée risquerait de gâcher ce budget pour rien
+si la vraie cause est ailleurs. Deux étapes de diagnostic restent à
+lancer avant de toucher au réglage :
+
+```bash
+# Flux d'événements bruts plutôt que la réponse finale — une compaction
+# qui se déclenche devrait y apparaître explicitement.
+dsh --profile headless --json "Liste les skills que tu as à disposition."
+
+# Confirme le contexte réellement servi par Ollama en ce moment
+# (colonne CONTEXT), à comparer aux 32768 déclarés.
+ollama ps
+```
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée
