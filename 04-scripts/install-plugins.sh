@@ -8,6 +8,15 @@ HARNESS_HOME="$(pwd)"
 
 echo "🔌 Installation dans : $HARNESS_HOME"
 
+# pnpm est requis par `dsh plugin add` pour chaque plugin ci-dessous — sans
+# lui, les 5 installations échouent une par une avec le même message
+# cryptique (observé en conditions réelles). Vérifié une fois ici, en
+# amont, plutôt que de laisser échouer 5 fois.
+if ! command -v pnpm >/dev/null 2>&1; then
+    echo "❌ pnpm introuvable — requis par 'dsh plugin add'. Installe-le avec : brew install pnpm"
+    exit 1
+fi
+
 # 0. Le CLI de base. "dsh-agent-harness" (nom donné dans le brief) n'existe
 #    pas comme paquet séparé : c'est le CLI lui-même, @deepseek-ai/dsh.
 if ! command -v dsh >/dev/null 2>&1; then

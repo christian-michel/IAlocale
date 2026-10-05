@@ -450,52 +450,53 @@ les décisions rapides sont bien calibrées avec un vrai modèle.
 
 ### Premier passage réel (2026-10-05) — ce qui a été trouvé, corrigé, et ce qui reste ouvert
 
-Trois causes distinctes, pas une panne généralisée :
+Trois rounds d'allers-retours avec des données réelles (`which dsh`,
+`dsh --version` = `0.1.7-rc.2`, puis `dsh --profile headless/web
+--dump-config` en entier). Six causes distinctes identifiées, pas une
+panne généralisée :
 
-1. **Section 2 (décision rapide) : "Aucun modèle déclaré" sur les 3 cas.**
-   `decision-rapide.js` lit `agent-default-model` dans
-   `~/.dsh/settings.yaml` — absent si le modèle a été configuré
-   autrement (ex. page "Models" de l'UI web de `dsh`, plutôt que
-   `setup-local-model.sh`/`basculer-modele.sh`). **Corrigé** :
-   `suite-tests-reelle.sh` détecte maintenant un modèle directement via
-   `ollama list` et le passe en `--modele` explicite, indépendamment de
-   ce fichier. Les fichiers `2a/2b/2c-*.json` remontés étaient vides pour
-   une raison annexe, corrigée au passage : ces appels ne redirigeaient
-   pas stderr vers le fichier capturé (`2>&1` manquant), contrairement
-   aux appels `dsh` de la section 3 — le message d'erreur n'était visible
-   qu'au terminal.
-2. **Section 5 (auto-implémentation) : "not a git repository".**
-   `auto-implementer.js` exige un vrai dépôt git (branches/commits/
-   fusions) — impossible dans un dossier qui n'a pas de `.git`. Le nom de
-   dossier observé (`IAlocale-claude-determined-pasteur-50jhkd`) est
-   exactement celui que produit "Download ZIP" sur GitHub, qui n'inclut
-   jamais `.git`. **Corrigé** : message d'erreur maintenant explicite sur
-   cette cause probable et la commande pour vérifier/corriger, plutôt que
-   de laisser remonter le message brut de git.
-   **Action attendue de ton côté** : confirme avec
-   `cd <dossier-du-projet> && git status` — si ça répond "not a git
-   repository", clone proprement avec `git clone` plutôt que de
-   réutiliser ce dossier.
-3. **Section 3 (tests techniques) : réponses de `dsh` hors sujet.** La
-   3a a renvoyé *"Got it. I'll use the available tools..."* (ignore le
-   contenu réel de la demande) ; la 3b a renvoyé une erreur de permission
-   sandbox (*"workspace-write"*) suivie d'un tag `<tool_call>` brut, non
-   interprété. Les deux signalent la même chose : `dsh` n'a pas traité la
-   tâche normalement, et le compteur de la section 4 confirme qu'aucun
-   skill du pipeline (`controleur-qualite`, `decision-rapide`...) ne
-   s'est engagé.
-   **Non corrigé ici** — je n'ai pas assez d'éléments pour distinguer,
-   sans deviner, parmi : (a) un problème de transmission du prompt par
-   `dsh --profile headless "<texte>"` tel que documenté, (b) un modèle
-   actif non configuré pour le format d'appel d'outils qu'attend `dsh`
-   (plusieurs modèles différents de celui prévu sont installés sur cette
-   machine — `qwen3-coder:latest`, `glm-4.7-flash`, `mistral`...), ou
-   (c) un comportement de `dsh` qui ne correspond pas à ce que sa
-   documentation décrit (jamais vérifié directement, voir "Non
-   vérifiable"). Le vocabulaire "workspace-write" ne correspond à rien
-   trouvé dans la documentation de `@deepseek-ai/dsh` consultée jusqu'ici
-   — à vérifier : `which dsh` et `dsh --version` confirment-ils bien le
-   paquet attendu ?
+1. **Section 2 : "Aucun modèle déclaré".** `decision-rapide.js` ne lisait
+   que `~/.dsh/settings.yaml` — alors que la vraie config active de cette
+   version de `dsh` vit dans
+   `~/.dsh/profiles/<profil>/cordis.patch.yml`, un fichier différent.
+   **Corrigé** : `lireModeleParDefaut()` retombe maintenant sur
+   `ollama list` (même logique que `suite-tests-reelle.sh`) si
+   `settings.yaml` ne donne rien — testé avec/sans ce fichier présent,
+   comportement confirmé dans les deux cas.
+2. **Section 5 : "not a git repository".** Le dossier du projet n'a pas
+   de `.git` — probablement un "Download ZIP" GitHub plutôt qu'un
+   `git clone` (le nom de dossier correspond exactement à cette
+   convention). **Corrigé** : message d'erreur explicite sur cette cause
+   et comment vérifier.
+3. **`pnpm` absent — les 5 installations de plugins échouaient
+   silencieusement.** `install-plugins.sh` ne vérifiait jamais sa
+   présence avant d'appeler `dsh plugin add`, qui en dépend. **Corrigé** :
+   vérifié une fois en amont, message clair (`brew install pnpm`) au lieu
+   de 5 échecs identiques et cryptiques.
+4. **La politique d'approbation du sandbox bloque les écritures en
+   headless — confirmé dans `--dump-config` lui-même** :
+   `approval.policy = (DSH_PERMISSION_MODE ?? 'workspace-write') ===
+   'danger-full-access' ? 'never' : 'ask'`. En `--profile headless`,
+   personne ne répond jamais à "ask". **Traité, pas activé par défaut** :
+   `suite-tests-reelle.sh` accepte maintenant
+   `AUTORISER_ECRITURE_HEADLESS=1` pour positionner
+   `DSH_PERMISSION_MODE=danger-full-access` — mais ce réglage désactive
+   aussi le confinement du sandbox, pas seulement l'attente d'approbation,
+   donc jamais activé sans un choix explicite de ta part.
+5. **Bonne nouvelle, hypothèse éliminée** : `tool-workflow`,
+   `workflow-ptc`, `goal`, `skill`, `skill-filesystem`, `tool-skill` sont
+   natifs du profil `headless` — leur absence n'explique donc **pas** les
+   réponses hors sujet des tests 3a/3b ; ce n'est pas lié au plugin
+   `dsh-workflow` resté non installé (point 3).
+6. **Ouvert** : `skill-filesystem` n'a pas de `customSkillDirs` visible
+   dans la config active de `headless`/`web` — seul le préréglage
+   "cordis" (non utilisé par défaut d'après le dump) en déclare un, et il
+   pointe vers le dossier interne du paquet `dsh-agent-preset`, pas vers
+   `01-skills/` de ce projet. Reste à confirmer : `dsh` voit-il vraiment
+   les skills de ce dépôt ? Test direct suggéré :
+   `dsh --profile headless "Liste les skills que tu as à disposition."`
+   — avant de conclure quoi que ce soit, plutôt que de continuer à
+   décortiquer la config à l'aveugle.
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 

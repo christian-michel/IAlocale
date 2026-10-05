@@ -106,6 +106,21 @@ journal ""
 journal "--- 3. Tests techniques via dsh (pipeline complet) ---"
 journal "Chaque appel peut prendre plusieurs minutes selon le modèle."
 
+# dsh --profile headless --dump-config confirme : approval.policy vaut
+# "ask" tant que DSH_PERMISSION_MODE != danger-full-access — or il n'y a
+# personne pour répondre "oui" en headless. Débloquer ça affaiblit aussi
+# le confinement du sandbox (danger-full-access, pas juste "n'attends
+# plus d'approbation") — décision volontairement laissée à qui lance ce
+# script, jamais activée par défaut.
+if [ "${AUTORISER_ECRITURE_HEADLESS:-}" = "1" ]; then
+    journal "AUTORISER_ECRITURE_HEADLESS=1 : DSH_PERMISSION_MODE=danger-full-access pour les tests 3a/3b (sandbox désactivé, pas seulement l'approbation)."
+    export DSH_PERMISSION_MODE=danger-full-access
+else
+    journal "AUTORISER_ECRITURE_HEADLESS non défini : les écritures de fichiers par dsh en headless resteront probablement bloquées (approval.policy=ask, personne pour répondre)."
+    journal "Pour autoriser : AUTORISER_ECRITURE_HEADLESS=1 ./04-scripts/suite-tests-reelle.sh (voir skill-decision-rapide pour la mise en garde)."
+fi
+journal ""
+
 journal "  3a. Page HTML5"
 mkdir -p "$DOSSIER/livrables"
 dsh --profile headless "Crée une page HTML5 complète et valide avec un titre, un paragraphe de description et un bouton. Sauvegarde-la dans $DOSSIER/livrables/test-html5.html. Avant de considérer la tâche terminée, fais vérifier le résultat par le contrôle qualité." \

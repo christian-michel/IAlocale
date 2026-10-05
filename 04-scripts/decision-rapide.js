@@ -88,11 +88,27 @@ function parseArgs(argv) {
   return args;
 }
 
-/** Lit agent-default-model dans ~/.dsh/settings.yaml — le modèle réellement
- * actif, celui que basculer-modele.sh a configuré en dernier. Passe le
- * chemin en argv à python3 plutôt que de l'interpoler dans le script
- * (même discipline que auto-implementer.js / boucle-surveillance.sh). */
+/** Lit agent-default-model dans ~/.dsh/settings.yaml — ce que
+ * basculer-modele.sh/setup-local-model.sh écrivent. Passe le chemin en
+ * argv à python3 plutôt que de l'interpoler (même discipline que
+ * auto-implementer.js / boucle-surveillance.sh).
+ *
+ * ⚠️ Vérifié en conditions réelles (retour utilisateur, dsh 0.1.7-rc.2) :
+ * ce fichier n'est pas forcément la source de vérité que dsh consulte
+ * réellement — `dsh --profile X --dump-config` peut montrer un modèle
+ * correctement configuré via ~/.dsh/profiles/<profil>/cordis.patch.yml
+ * alors que settings.yaml est absent ou périmé. decision-rapide.js parle
+ * directement à Ollama, jamais à dsh (voir l'en-tête de ce fichier) : la
+ * cohérence veut donc que son repli ultime interroge Ollama directement
+ * lui aussi, plutôt que de deviner lequel des fichiers de config de dsh
+ * fait foi. */
 function lireModeleParDefaut() {
+  const depuisSettings = lireModeleDepuisSettingsYaml();
+  if (depuisSettings) return depuisSettings;
+  return lirePremierModeleOllama();
+}
+
+function lireModeleDepuisSettingsYaml() {
   const settingsPath = path.join(os.homedir(), '.dsh', 'settings.yaml');
   if (!existsSync(settingsPath)) return null;
   const resultat = spawnSync('python3', ['-c', `
@@ -104,6 +120,18 @@ print((data.get('agent-default-model') or {}).get('model') or '')
   if (resultat.error || resultat.status !== 0) return null;
   const modele = resultat.stdout.trim();
   return modele || null;
+}
+
+/** Repli : demande à `ollama list` ce qui est réellement disponible,
+ * sans rien supposer sur la config de dsh. Même commande que celle
+ * utilisée par suite-tests-reelle.sh pour le même besoin. */
+function lirePremierModeleOllama() {
+  const resultat = spawnSync('ollama', ['list'], { encoding: 'utf-8' });
+  if (resultat.error || resultat.status !== 0) return null;
+  const lignes = resultat.stdout.trim().split('\n');
+  if (lignes.length < 2) return null; // juste l'en-tête, aucun modèle tiré
+  const premiereColonne = lignes[1].trim().split(/\s+/)[0];
+  return premiereColonne || null;
 }
 
 /** Vérifie après coup que la décision respecte vraiment ce qui a été
