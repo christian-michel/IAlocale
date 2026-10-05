@@ -14,16 +14,72 @@ echo "🦙 Configuration du modèle local : $MODEL"
 command -v ollama >/dev/null 2>&1 || { echo "❌ Ollama n'est pas installé. brew install ollama"; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "❌ python3 requis pour fusionner le YAML."; exit 1; }
 
-# 1) Contexte : Ollama choisit sa fenêtre de contexte par défaut selon un
+# Redémarre le vrai serveur Ollama en cours d'exécution, quel que soit son
+# mode d'installation — trouvé en pratique (voir README, "Validation sur
+# machine réelle", round 5) : `brew services restart ollama` est un no-op
+# SILENCIEUX si Ollama tourne via l'app officielle (Ollama.app) plutôt que
+# comme formule brew (cas confirmé sur un Mac Mini réel : `ollama` présent
+# comme binaire CLI, mais le vrai serveur est lancé par Ollama.app). Un
+# no-op silencieux ici a fait tourner ce script "avec succès" pendant
+# plusieurs rounds sans jamais réellement appliquer OLLAMA_CONTEXT_LENGTH
+# au serveur réel — jamais plus d'erreur avalée par `|| true` sans message.
+redemarrer_ollama() {
+    if brew list ollama >/dev/null 2>&1; then
+        echo "🔁 Redémarrage via brew services (formule 'ollama' installée ici)..."
+        brew services restart ollama
+    elif [ -d "/Applications/Ollama.app" ]; then
+        echo "🔁 Ollama tourne via Ollama.app (pas une formule brew sur cette machine) — redémarrage de l'app..."
+        pkill -x Ollama 2>/dev/null || true
+        pkill -f "ollama serve" 2>/dev/null || true
+        sleep 2
+        open -a Ollama
+    elif pgrep -f "ollama serve" >/dev/null 2>&1; then
+        echo "🔁 Redémarrage du processus 'ollama serve' lancé manuellement..."
+        pkill -f "ollama serve"
+        sleep 1
+        nohup ollama serve >/tmp/ollama-serve.log 2>&1 &
+    else
+        echo "⚠️  Aucun serveur Ollama détecté en cours d'exécution (ni brew, ni Ollama.app, ni 'ollama serve' manuel)."
+        echo "   Démarre-le manuellement, puis relance ce script."
+        return 1
+    fi
+    sleep 3
+}
+
+# 1) Mémoire GPU (Apple Silicon) : macOS plafonne par défaut la part de
+#    mémoire unifiée que Metal a le droit de verrouiller pour le GPU
+#    (iogpu.wired_limit_mb, souvent ~75% de la RAM totale quand il vaut 0 =
+#    automatique). Trouvé en pratique sur un Mac Mini 24 Go : un modèle de
+#    ~19 Go peut dépasser ce plafond automatique et planter à CHAQUE appel
+#    avec "Insufficient Memory (kIOGPUCommandBufferCallbackErrorOutOfMemory)"
+#    — y compris sur un prompt de 13 tokens, le poids du modèle seul suffit
+#    à dépasser la limite. Pas spécifique à ce modèle : touche tout modèle
+#    dont la taille approche le plafond automatique sur cette machine.
+if [ "$(uname)" = "Darwin" ]; then
+    RAM_TOTALE_MO=$(( $(sysctl -n hw.memsize) / 1024 / 1024 ))
+    LIMITE_GPU_MO=$(( RAM_TOTALE_MO - 2048 ))   # garde 2 Go de marge pour macOS
+    LIMITE_ACTUELLE=$(sysctl -n iogpu.wired_limit_mb 2>/dev/null || echo 0)
+    echo "🎮 Limite mémoire GPU (iogpu.wired_limit_mb) actuelle : ${LIMITE_ACTUELLE} Mo (0 = automatique, ~75% de la RAM totale)."
+    echo "   Relèvement à ${LIMITE_GPU_MO} Mo (RAM totale ${RAM_TOTALE_MO} Mo - 2 Go de marge)..."
+    if sudo sysctl iogpu.wired_limit_mb="$LIMITE_GPU_MO"; then
+        echo "   ⚠️  Ce réglage ne survit PAS à un redémarrage de la machine — à refaire après chaque reboot (relance ce script, ou voir README pour le rendre permanent via un LaunchDaemon)."
+    else
+        echo "   ⚠️  Échec du relèvement (sudo requis, ou 'iogpu.wired_limit_mb' absent sur cette version de macOS) — si des plantages 'Insufficient Memory' apparaissent plus tard, voir README."
+    fi
+fi
+
+# 2) Contexte : Ollama choisit sa fenêtre de contexte par défaut selon un
 #    palier mémoire qu'on ne veut pas laisser au hasard (voir README,
-#    section "Piège du contexte"). On le fixe explicitement.
+#    section "Piège du contexte"). On le fixe explicitement, puis on
+#    redémarre le VRAI serveur (fonction ci-dessus) pour que ça s'applique
+#    réellement — un simple `export`/`launchctl setenv` ne touche jamais un
+#    processus déjà démarré avant.
 echo "📏 Configuration d'OLLAMA_CONTEXT_LENGTH=$CONTEXT_LENGTH..."
 if [ "$(uname)" = "Darwin" ]; then
     launchctl setenv OLLAMA_CONTEXT_LENGTH "$CONTEXT_LENGTH" 2>/dev/null || true
 fi
 export OLLAMA_CONTEXT_LENGTH="$CONTEXT_LENGTH"
-brew services restart ollama >/dev/null 2>&1 || true
-sleep 2
+redemarrer_ollama
 
 # 2) Le modèle doit être présent localement.
 echo "📥 Téléchargement de $MODEL si nécessaire..."

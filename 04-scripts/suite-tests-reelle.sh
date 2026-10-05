@@ -47,7 +47,7 @@ if ! command -v dsh >/dev/null 2>&1; then
     exit 1
 fi
 if ! curl -s -o /dev/null http://127.0.0.1:11434/api/tags; then
-    journal "ÉCHEC : Ollama ne répond pas sur 11434. Lance : brew services start ollama"
+    journal "ÉCHEC : Ollama ne répond pas sur 11434. Lance : brew services start ollama (formule brew) ou ouvre l'app Ollama.app (voir README, 'Validation sur machine réelle', round 5 — brew ne gère pas forcément le vrai serveur)."
     exit 1
 fi
 journal "dsh et Ollama répondent. Modèles disponibles :"

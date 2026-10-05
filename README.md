@@ -498,45 +498,98 @@ panne généralisée :
    — avant de conclure quoi que ce soit, plutôt que de continuer à
    décortiquer la config à l'aveugle.
 
-### Round 3 (test direct lancé) — nouvelle piste sur les réponses hors sujet
+### Round 3 — hypothèse de compaction, infirmée au round suivant
 
 Le test suggéré au point 6 a été lancé :
 `dsh --profile headless "Liste les skills que tu as à disposition."`.
 Au lieu d'une liste de skills, la sortie contenait un bloc de texte qui
-ressemble à un prompt interne de **compaction de conversation** — le
-genre de prompt qu'un harnais agentique s'envoie à lui-même en coulisses
-quand le contexte devient trop plein, jamais censé être montré tel quel.
+ressemblait à un prompt interne de **compaction de conversation**.
+Hypothèse formulée à l'époque : `dsh-compaction-basic`/`dsh-command-compact`
+(actifs en `headless` d'après `--dump-config`) se déclenchant à cause d'une
+fenêtre de contexte (32768) trop étroite face au catalogue d'outils
+(~14 700 tokens, voir "Optimisation..." ci-dessous).
 
-Hypothèse, non confirmée : `@deepseek-ai/dsh-compaction-basic` et
-`@deepseek-ai/dsh-command-compact` sont actifs dans le profil `headless`
-(vus dans `--dump-config`), et la fenêtre de contexte déclarée ici
-(32768, voir "Pourquoi `OLLAMA_CONTEXT_LENGTH` mérite d'être fixé
-explicitement" ci-dessus) est étroite face au coût déjà documenté plus
-bas (~14 700 tokens rien que pour le catalogue d'outils, voir
-"Optimisation pour Mac Mini M4 / 24 Go") — si le déclenchement de la
-compaction est calibré pour des fenêtres bien plus larges (modèles
-cloud, 128k+ couramment), un budget aussi serré pourrait la faire se
-déclencher presque systématiquement. Ça expliquerait aussi, par le même
-mécanisme, les réponses hors sujet des tests 3a/3b (point 5 du round
-précédent, jamais élucidées) : pas une panne de pipeline, mais une
-compaction qui interrompt la tâche avant qu'elle ne commence vraiment.
+**Infirmée au round 4** : le flux brut (`--json`) d'un nouvel essai ne
+contient aucun événement de compaction, seulement une erreur de transport
+pure — voir juste en dessous. Le texte observé au round 3 était
+vraisemblablement un repli générique de `dsh` face à cette même erreur,
+pas une compaction réelle.
 
-**Volontairement pas corrigé avant d'avoir confirmé** : augmenter
-`contextWindow`/`OLLAMA_CONTEXT_LENGTH` a un coût RAM réel sur un budget
-déjà serré (24 Go, voir "Optimisation..."), et le corriger à l'aveugle
-sur une hypothèse non vérifiée risquerait de gâcher ce budget pour rien
-si la vraie cause est ailleurs. Deux étapes de diagnostic restent à
-lancer avant de toucher au réglage :
+### Round 4 — la vraie piste : crash GPU, indépendant de `dsh`
 
-```bash
-# Flux d'événements bruts plutôt que la réponse finale — une compaction
-# qui se déclenche devrait y apparaître explicitement.
-dsh --profile headless --json "Liste les skills que tu as à disposition."
-
-# Confirme le contexte réellement servi par Ollama en ce moment
-# (colonne CONTEXT), à comparer aux 32768 déclarés.
-ollama ps
+`dsh --profile headless --json "..."` a produit une erreur nette :
+```json
+{"usage":{"inputTokens":0,"outputTokens":0,"totalTokens":0}}
+{"reason":{"kind":"error","error":{"message":"Stream ended without finish_reason","code":"TRANSPORT"}}}
 ```
+Coupure avant même qu'un seul token ne soit compté — pas pendant la
+génération, avant. `tail ~/.ollama/logs/server.log` a montré la vraie
+cause :
+```
+error: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory)
+llama_decode: failed to decode, ret = -3
+```
+Confirmé indépendant de `dsh` : `ollama run qwen3-coder:30b-a3b-q4_K_M
+"Dis juste bonjour."` (sans `dsh`, sans outils, 3 mots) plantait pareil,
+avec la même erreur dans le log, même sur un prompt de 13 tokens. Le
+modèle (~19 Go en Q4) dépassait le plafond de mémoire GPU que macOS
+autorise Metal à verrouiller sur cette machine (`iogpu.wired_limit_mb`,
+qui valait `0` = automatique, généralement ~75 % de la RAM totale — donc
+~18 Go sur 24 Go, juste sous les ~19 Go du modèle).
+
+Le même log a aussi confirmé, séparément, le point 6 du round 2 :
+`n_ctx_slot = 4096`, pas 32768 — le réglage `OLLAMA_CONTEXT_LENGTH` du
+round 1 n'avait jamais atteint le serveur réellement en cours
+d'exécution.
+
+### Round 5 — cause racine unique confirmée pour les deux bugs, corrigée
+
+`sudo sysctl iogpu.wired_limit_mb=22528` appliqué à chaud n'a rien changé
+(même crash, même prompt minimal) — signe que le processus serveur déjà
+démarré ne relit pas ce réglage en cours de route. Investigation :
+```
+ps aux | grep -i ollama
+→ /Applications/Ollama.app/Contents/Resources/llama-server ...
+→ /Applications/Ollama.app/Contents/MacOS/Ollama hidden   (démarré au login, 8:38)
+→ /usr/local/bin/ollama serve
+```
+**Cause racine unique pour les deux bugs ouverts (contexte à 4096 ET crash
+GPU)** : sur cette machine, Ollama tourne via l'app officielle
+`Ollama.app` (démarrée au login), pas comme formule `brew`. Or
+`setup-local-model.sh` (depuis le tout premier round) appelait
+`brew services restart ollama >/dev/null 2>&1 || true` pour appliquer tout
+changement — un **no-op silencieux** quand `ollama` n'est pas une formule
+brew. Le vrai serveur n'a donc jamais été redémarré par ce script, ni pour
+`OLLAMA_CONTEXT_LENGTH` (round 1), ni pour `iogpu.wired_limit_mb` (round
+4) : les deux réglages existaient bien quelque part (variable
+d'environnement, sysctl noyau) mais n'avaient jamais atteint le processus
+qui sert réellement les requêtes.
+
+Confirmé en tuant et relançant le vrai processus
+(`pkill -x Ollama; pkill -f "ollama serve"; open -a Ollama`) avec
+`iogpu.wired_limit_mb=22528` actif : `ollama run ... "Dis juste bonjour."`
+a répondu (`Bonjour ! 😊`), et le log a montré `n_ctx_slot = 32768` — les
+deux bugs résolus par le même redémarrage, confirmant qu'ils partageaient
+la même cause.
+
+**Corrigé** dans `setup-local-model.sh` :
+- Relève désormais `iogpu.wired_limit_mb` (calculé depuis `hw.memsize`,
+  marge de 2 Go pour macOS) à chaque exécution — avec avertissement
+  explicite que ce réglage ne survit pas à un redémarrage de la machine
+  (à refaire après chaque reboot en relançant ce script).
+- `redemarrer_ollama()` détecte maintenant le vrai mode d'exécution
+  (formule brew / `Ollama.app` / `ollama serve` lancé à la main) et
+  redémarre le bon processus en conséquence, avec un message clair dans
+  chaque cas — plus aucun échec avalé silencieusement par `|| true`.
+- Messages d'aide de `security-check.sh` et `suite-tests-reelle.sh`
+  mis à jour pour mentionner `Ollama.app` comme alternative à
+  `brew services start`.
+
+**Reste ouvert** : la question initiale du point 6 (round 2) —
+`dsh` voit-il vraiment les skills de `01-skills/` — n'a toujours pas été
+testée pour de vrai, le serveur étant resté cassé jusqu'ici. À relancer
+maintenant que le serveur répond :
+`dsh --profile headless "Liste les skills que tu as à disposition."`.
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
