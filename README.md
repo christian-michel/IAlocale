@@ -59,6 +59,15 @@ ici — voir plus bas.
   bout en bout sur trois domaines différents (code, juridique, comptable
   — voir section "Décision rapide"), y compris le cas où la confiance est
   insuffisante et où le repli doit se déclencher.
+- `suite-tests-reelle.sh` : exécuté intégralement contre un faux `dsh` et
+  un faux Ollama, dans un dépôt git jetable (jamais celui-ci) — bug trouvé
+  et corrigé dans le stub de test lui-même (pas dans le script), logique
+  réelle confirmée : arguments transmis correctement à `dsh`, fichiers
+  livrés aux bons chemins, auto-implémentation fusionne/rejette comme
+  attendu. Ce que ce test NE prouve PAS : que le vrai `dsh` engage
+  réellement le contrôle qualité en pratique, ni qu'un vrai modèle est
+  bien calibré — c'est précisément ce que ce script sert à vérifier sur
+  la vraie machine.
 
 ## ❌ Non vérifiable dans mon environnement
 
@@ -354,6 +363,44 @@ dsh --profile headless 'Explique-moi ce que fait 04-scripts/dsh-logger.js'
 ./start.sh
 ```
 
+## 🧪 Validation sur machine réelle
+
+Tout ce qui précède a été écrit et testé contre des substituts (faux
+serveur Ollama, faux `dsh`, dépôts git jetables) — jamais contre une
+vraie installation, faute d'Ollama/dsh disponibles dans l'environnement
+où ce projet est développé. `04-scripts/suite-tests-reelle.sh` referme
+cet écart : à lancer une fois l'installation ci-dessus terminée.
+
+```bash
+./04-scripts/suite-tests-reelle.sh
+```
+
+Il enchaîne, en conditions réelles :
+1. Validation syntaxique de tous les skills/workflows.
+2. `decision-rapide.js` sur 3 domaines (code, juridique, comptable).
+3. **2 tests techniques de bout en bout via `dsh`** : une page HTML5, un
+   thème WordPress nommé `test` — chacun avec consigne explicite de
+   passer par le contrôle qualité avant de considérer la tâche finie.
+4. Comptage des traces de chaque composant clé
+   (`decision-rapide`/`controleur-de-controle`/`controleur-qualite`/
+   `ameliorateur-systeme`/`auto-implementer`) dans le journal structuré —
+   un composant à 0 occurrence après les tests 3a/3b signale qu'il ne
+   s'est probablement pas engagé, ce qui n'a jamais pu être confirmé
+   depuis mon environnement.
+5. `auto-implementer.js` : une proposition qui doit fusionner, une qui
+   doit être refusée — sur un fichier de test clairement jetable
+   (`skill-test-validation-reelle.md`, à supprimer après coup, instructions
+   affichées en fin de script).
+
+Résultats dans `logs/validation-<horodatage>/` (déjà exclu du dépôt par
+`.gitignore`, puisque tout `logs/` l'est). **Logique du script validée
+de bout en bout ici** (faux `dsh`/Ollama, dépôt git jetable — jamais ce
+dépôt-ci) : arguments correctement transmis, fichiers correctement créés
+aux bons chemins, auto-implémentation fusionne/rejette comme attendu.
+Ce qui reste à vérifier UNIQUEMENT sur la vraie machine : si `dsh`
+engage réellement le pipeline de contrôle qualité en pratique, et si
+les décisions rapides sont bien calibrées avec un vrai modèle.
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée
@@ -387,6 +434,7 @@ dsh-harness/
 │   ├── valider-skills-workflows.js  # vérification déterministe skills/workflows (testé)
 │   ├── auto-implementer.js   # applique une proposition sur branche git dédiée (testé)
 │   ├── decision-rapide.js    # décision rapide type JEV, appel Ollama contraint (testé via mock)
+│   ├── suite-tests-reelle.sh # protocole de validation complète sur machine réelle (testé via stubs)
 │   ├── security-check.sh
 │   ├── install-plugins.sh    # plugins corrigés (dsh-workflow, dsh-tui, etc.)
 │   └── setup-local-model.sh  # bascule vers Ollama local (testé, fusion YAML)
