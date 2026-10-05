@@ -132,6 +132,14 @@ précis plutôt qu'une bascule générale.
   sépare `chargement_ms` de `decision_ms` pour que ce coût reste visible
   plutôt que caché dans un `duree_ms` global trompeur.
 
+## Vers une amélioration de Laya par l'usage
+
+Chaque fois que `decision-rapide.js` renvoie `fiable: false`, c'est une
+occasion de savoir, plus tard, si la décision rapide avait quand même
+raison. `04-scripts/journal-desaccords.js` consigne systématiquement ces
+cas (voir `skill-journal-desaccords.md`) — première brique vers un
+éventuel fine-tuning de Laya, pas encore le fine-tuning lui-même.
+
 ## Règle d'or
 
 Une décision rapide qui se trompe silencieusement coûte plus cher que le

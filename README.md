@@ -31,7 +31,7 @@ ici — voir plus bas.
   fichier existant contenant d'autres réglages — confirmé que seules les
   clés gérées (`llm-pi-ai.providers.ollama`, `agent-default-model`) sont
   modifiées, le reste est préservé intact.
-- Les 18 skills : frontmatter YAML validé individuellement
+- Les 19 skills : frontmatter YAML validé individuellement
   (`node 04-scripts/valider-skills-workflows.js`).
 - Les 5 workflows : JSON validé syntaxiquement.
 - Toute la chaîne shell (`start.sh`, `install-plugins.sh`,
@@ -62,6 +62,11 @@ ici — voir plus bas.
   `Laya.load`/`systemOne`) n'a pas pu être exécutée — voir section
   "Décision rapide" pour la cause précise (api.nuget.org bloqué dans mon
   environnement).
+- `journal-desaccords.js` : testé directement — les trois résolutions
+  (`accord`, `desaccord`, `escalade_sans_comparaison`), `resume` global
+  et filtré (moyennes de confiance par résolution), `exporter` filtré,
+  et résilience à une ligne JSONL corrompue (ignorée et signalée, pas de
+  perte du reste du journal).
 - `identifier-meilleur` + `decision-rapide.js` ensemble : 3 scénarios de
   bout en bout sur trois domaines différents (code, juridique, comptable
   — voir section "Décision rapide"), y compris le cas où la confiance est
@@ -275,6 +280,24 @@ Le cas juridique démontre le garde-fou : des candidats aux scores proches
 produisent une confiance faible, et le mécanisme refuse de trancher seul
 plutôt que de deviner.
 
+### Journal des désaccords — vers un Laya qui s'améliore par l'usage
+
+`04-scripts/journal-desaccords.js` consigne chaque `fiable: false` de
+`decision-rapide.js`, puis complète la ligne avec le résultat
+délibératif une fois connu (`accord` / `desaccord` /
+`escalade_sans_comparaison`, calculés, jamais déclarés directement).
+Append-only par conception — pas de commande de suppression — puisque
+c'est la matière première envisagée pour un éventuel fine-tuning de
+Laya : on ne fine-tune rien sans exemples réels de ce qui a posé
+problème. Le fine-tuning lui-même reste un chantier séparé, non entamé
+(voir `01-skills/skill-journal-desaccords.md`).
+
+Câblé dans `identifier-meilleur` (v1.4.0) : testé directement (3
+résolutions, résumé agrégé avec moyennes de confiance par résolution,
+export filtré, résilience à une ligne JSONL corrompue) ; l'engagement
+réel depuis `dsh-workflow` hérite de la même réserve que le reste de ce
+workflow — non vérifiable dans mon environnement.
+
 ## 🔍 Contrôle à deux niveaux
 
 L'agent de contrôle du travail fourni existait déjà : c'est
@@ -439,9 +462,9 @@ indexe automatiquement ; aucun changement de code n'est nécessaire.
 dsh-harness/
 ├── .gitignore               # logs/, 06-data/memoire/, 02-plugins/, meta-index.json...
 ├── package.json              # seule dépendance npm : @receptron/laya, optionnelle (moteur laya de decision-rapide.js)
-├── 01-skills/              # 18 skills (+ boucles-agentiques, gestion-memoire, auto-implementation,
+├── 01-skills/              # 19 skills (+ boucles-agentiques, gestion-memoire, auto-implementation,
 │                            #   ameliorateur-systeme séparé de ameliorateur, decision-rapide,
-│                            #   controleur-de-controle)
+│                            #   controleur-de-controle, journal-desaccords)
 ├── 02-plugins/              # agentic-research, dsh-find-plugins (clonés à l'install)
 ├── 03-workflows/            # 5 workflows JSON (schéma non-vérifiable formellement)
 │   ├── auto-amelioration.workflow.json   # propose → évalue → applique (auto-implementer.js)
@@ -458,7 +481,8 @@ dsh-harness/
 │   ├── basculer-modele.sh    # bascule entre profils de 05-configs/modeles.yaml (testé)
 │   ├── valider-skills-workflows.js  # vérification déterministe skills/workflows (testé)
 │   ├── auto-implementer.js   # applique une proposition sur branche git dédiée (testé)
-│   ├── decision-rapide.js    # décision rapide type JEV, appel Ollama contraint (testé via mock)
+│   ├── decision-rapide.js    # décision rapide, moteurs ollama/laya (ollama testé via mock)
+│   ├── journal-desaccords.js # historique JSONL append-only des fiable:false (testé)
 │   ├── suite-tests-reelle.sh # protocole de validation complète sur machine réelle (testé via stubs)
 │   ├── security-check.sh
 │   ├── install-plugins.sh    # plugins corrigés (dsh-workflow, dsh-tui, etc.)
