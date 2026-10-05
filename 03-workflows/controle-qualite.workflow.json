@@ -1,7 +1,7 @@
 {
   "name": "controle-qualite",
   "description": "Vérifie, teste et valide une réponse — en tenant compte de l'historique d'erreurs récentes.",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "inputs": {
     "reponse_brute": { "type": "string" },
     "demande_originale": { "type": "string" },
@@ -22,6 +22,16 @@
         "inputs": { "demande": "{{demande_originale}}", "criteres": "{{criteres}}" }
       },
       "outputs": { "evaluation": "$.result" }
+    },
+    {
+      "id": "contre-verifier",
+      "agent": {
+        "type": "subagent",
+        "skill": "skill-controleur-de-controle",
+        "instructions": "Audite le verdict ci-dessus, pas la réponse originale : {{evaluation}}",
+        "inputs": { "demande": "{{demande_originale}}", "reponse": "{{reponse_brute}}" }
+      },
+      "outputs": { "meta_evaluation": "$.result" }
     },
     {
       "id": "detecter-code",
@@ -49,20 +59,22 @@
     },
     {
       "id": "apprendre",
-      "condition": "evaluation.statut == 'INVALIDE' or resultats_tests.statut == 'ECHEC'",
-      "agent": { "type": "subagent", "skill": "skill-apprendre-des-echecs", "instructions": "Enregistre une leçon à partir de cet échec." },
+      "condition": "evaluation.statut == 'INVALIDE' or resultats_tests.statut == 'ECHEC' or meta_evaluation.verdict_final == 'A_RECONSIDERER'",
+      "agent": { "type": "subagent", "skill": "skill-apprendre-des-echecs", "instructions": "Enregistre une leçon à partir de cet échec (y compris si c'est un désaccord entre les deux niveaux de contrôle plutôt qu'un échec de tâche)." },
       "outputs": { "lecon": "$.result" }
     },
     {
       "id": "declencher-auto-amelioration",
-      "condition": "evaluation.statut == 'INVALIDE' or resultats_tests.statut == 'ECHEC'",
+      "condition": "evaluation.statut == 'INVALIDE' or resultats_tests.statut == 'ECHEC' or meta_evaluation.verdict_final == 'A_RECONSIDERER'",
       "agent": { "type": "workflow", "name": "auto-amelioration", "args": { "contexte": "Déclenché après un échec significatif : {{lecon}}" } },
       "outputs": { "resultat_auto_amelioration": "$.result" }
     }
   ],
   "output": {
     "statut": "$.verifier-reponse.evaluation.statut",
-    "reponse_finale": { "condition": "statut == 'VALIDE'", "value": "{{reponse_brute}}" },
+    "verdict_meta": "$.contre-verifier.meta_evaluation.verdict_final",
+    "divergences_meta": "$.contre-verifier.meta_evaluation.divergences",
+    "reponse_finale": { "condition": "statut == 'VALIDE' and verdict_meta != 'A_RECONSIDERER'", "value": "{{reponse_brute}}" },
     "reponse_corrigee": "$.corriger-si-invalide.reponse_corrigee",
     "rapport_tests": "$.tester-code.resultats_tests"
   }

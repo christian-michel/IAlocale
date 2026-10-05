@@ -68,16 +68,30 @@ en dernier) sauf si `--modele` est passé explicitement.
 
 ## Où ça s'intègre dans les workflows existants
 
-Ce mécanisme n'a volontairement pas été rétro-ajouté dans
-`controle-qualite.workflow.json` ni dans les autres workflows existants :
-je n'ai pas pu tester leur comportement réel (jamais exécuté `dsh` en
-conditions réelles, voir README section "Non vérifiable"), et remplacer
-une étape existante sans pouvoir vérifier l'effet sur la machine cible
-serait plus risqué qu'utile. Si tu identifies une étape précise à
-accélérer (ex. `identifier-meilleur` dans
-`systeme-auto-ameliorant-avec-controle.workflow.json`, qui est
-fondamentalement un choix parmi N résultats), demande l'intégration de ce
-cas précis plutôt qu'une bascule générale.
+Branché dans `identifier-meilleur`
+(`03-workflows/systeme-auto-ameliorant-avec-controle.workflow.json`,
+v1.3.0) : choisir le meilleur résultat parmi N expériences évaluées est
+un choix fermé, candidat naturel. L'étape tente d'abord
+`decision-rapide.js --type choix` ; si `fiable: false` (confiance sous
+`--seuil-confiance 0.75`) ou en cas d'échec, elle retombe sur la
+comparaison délibérative habituelle — la logique de repli vit dans les
+instructions de l'étape elle-même (pas dans une syntaxe conditionnelle du
+moteur de workflow que je ne peux pas vérifier), voir le fichier
+directement.
+
+Validé avec un faux serveur Ollama sur trois domaines (code, juridique,
+comptable) : choix confiant dans deux cas (code, comptable), confiance
+sous le seuil dans le troisième (juridique, candidats aux scores
+proches) — déclenchant bien le code de sortie 2 attendu. Le comportement
+contre un vrai modèle (le seuil de 0.75 est-il le bon réglage ? un
+modèle 30B-A3B exprime-t-il une confiance bien calibrée ?) reste à
+confirmer sur la machine cible.
+
+Les autres workflows n'ont volontairement pas été touchés : remplacer
+une étape sans pouvoir vérifier l'effet sur `dsh` en conditions réelles
+(jamais exécuté dans mon environnement, voir README section "Non
+vérifiable") serait plus risqué qu'utile. Demande l'intégration d'un cas
+précis plutôt qu'une bascule générale.
 
 ## Règle d'or
 

@@ -1,7 +1,7 @@
 {
   "name": "systeme-auto-ameliorant-avec-controle",
   "description": "Système complet auto-améliorant avec contrôle de qualité et rétro-analyse des erreurs.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "inputs": {
     "demande": { "type": "string" },
     "seuil_satisfaction": { "type": "number", "default": 8.0 },
@@ -17,7 +17,7 @@
       "steps": [
         { "id": "experimenter", "agent": { "type": "workflow", "name": "meta-experimentation", "args": { "demande": "{{demande}}" } }, "outputs": { "resultats": "$.result" } },
         { "id": "evaluer", "parallel": true, "for_each": "resultats.resultats_experiences", "agent": { "type": "subagent", "skill": "skill-evaluateur", "instructions": "Évalue ce résultat." }, "outputs": { "evaluations": "$.result" } },
-        { "id": "identifier-meilleur", "agent": { "type": "subagent", "instructions": "Compare les évaluations, trouve le meilleur." }, "outputs": { "meilleur_score": "$.result.meilleur_score", "meilleure_reponse": "$.result.meilleure_reponse" } },
+        { "id": "identifier-meilleur", "agent": { "type": "subagent", "instructions": "Choisir le meilleur résultat parmi {{evaluations}} est une décision fermée (un index parmi N) — tente d'abord la voie rapide : exécute `node 04-scripts/decision-rapide.js --question \"Quel index de la liste a le meilleur score_global ?\" --type choix --choix \"<index 0 à N-1 séparés par des virgules>\" --contexte \"<JSON associant chaque index à son score_global>\" --seuil-confiance 0.75`. Si le JSON retourné a \"fiable\": true, le meilleur résultat est celui à l'index \"decision\" dans resultats.resultats_experiences — renvoie {meilleur_score, meilleure_reponse} correspondants et methode:'rapide'. Si \"fiable\": false, ou si la commande échoue (voir skill-decision-rapide pour les codes de sortie), ignore son résultat et compare toi-même les évaluations en détail (méthode délibérative habituelle) — renvoie {meilleur_score, meilleure_reponse} et methode:'deliberative'. Ne jamais utiliser un résultat 'fiable': false." }, "outputs": { "meilleur_score": "$.result.meilleur_score", "meilleure_reponse": "$.result.meilleure_reponse", "methode_identification": "$.result.methode" } },
         { "id": "controler-qualite", "agent": { "type": "workflow", "name": "controle-qualite", "args": { "reponse_brute": "{{meilleure_reponse}}", "demande_originale": "{{demande}}" } }, "outputs": { "statut_validation": "$.result.statut", "reponse_corrigee": "$.result.reponse_corrigee" } }
       ],
       "outputs": { "score_global": "$.identifier-meilleur.meilleur_score", "statut_validation": "$.controler-qualite.statut_validation" }

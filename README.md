@@ -31,7 +31,7 @@ ici — voir plus bas.
   fichier existant contenant d'autres réglages — confirmé que seules les
   clés gérées (`llm-pi-ai.providers.ollama`, `agent-default-model`) sont
   modifiées, le reste est préservé intact.
-- Les 17 skills : frontmatter YAML validé individuellement
+- Les 18 skills : frontmatter YAML validé individuellement
   (`node 04-scripts/valider-skills-workflows.js`).
 - Les 5 workflows : JSON validé syntaxiquement.
 - Toute la chaîne shell (`start.sh`, `install-plugins.sh`,
@@ -55,6 +55,10 @@ ici — voir plus bas.
   Le comportement contre un VRAI Ollama (un vrai modèle respecte-t-il
   bien la contrainte de schéma en pratique ?) reste à confirmer sur ta
   machine.
+- `identifier-meilleur` + `decision-rapide.js` ensemble : 3 scénarios de
+  bout en bout sur trois domaines différents (code, juridique, comptable
+  — voir section "Décision rapide"), y compris le cas où la confiance est
+  insuffisante et où le repli doit se déclencher.
 
 ## ❌ Non vérifiable dans mon environnement
 
@@ -219,9 +223,61 @@ génération complète ET le coût du catalogue d'outils de `dsh` (voir
 (`--seuil-confiance`) fait qu'une décision peu sûre est signalée comme
 telle (`fiable: false`, code de sortie 2) plutôt que d'être utilisée en
 confiance — à l'appelant d'escalader vers un skill délibératif complet
-dans ce cas. Voir `01-skills/skill-decision-rapide.md` pour la méthode et
-les limites (volontairement non rétro-intégré dans les workflows
-existants, faute de pouvoir tester leur comportement réel).
+dans ce cas. Voir `01-skills/skill-decision-rapide.md` pour la méthode.
+
+**Branché dans `identifier-meilleur`**
+(`systeme-auto-ameliorant-avec-controle.workflow.json`) : choisir le
+meilleur résultat parmi N expériences est un choix fermé — tente la voie
+rapide, retombe sur la comparaison délibérative si la confiance est
+insuffisante. Validé sur trois domaines (faux serveur Ollama, modèle réel
+non disponible dans mon environnement) :
+
+| Domaine | Candidats | Décision | Confiance | Résultat |
+|---|---|---|---|---|
+| Code (validation d'email) | 3, scores 6.5/9.2/7.8 | index 1 | 0.93 | ✅ rapide, fiable |
+| Juridique (clause de résiliation) | 2, scores proches 7.1/7.4 | index 1 | 0.52 | ⚠️ sous le seuil → repli délibératif |
+| Comptable (amortissement) | 3, scores 5.0/8.8/6.2 | index 1 | 0.88 | ✅ rapide, fiable, avec justification |
+
+Le cas juridique démontre le garde-fou : des candidats aux scores proches
+produisent une confiance faible, et le mécanisme refuse de trancher seul
+plutôt que de deviner.
+
+## 🔍 Contrôle à deux niveaux
+
+L'agent de contrôle du travail fourni existait déjà : c'est
+`skill-controleur-qualite` (complétude, précision, test pratique,
+historique d'erreurs — voir `controle-qualite.workflow.json`, étape
+`verifier-reponse`). Pas dupliqué ici — un second niveau lui a été
+adjoint à la place :
+
+```
+verifier-reponse (skill-controleur-qualite)
+        │  "la réponse est-elle VALIDE ?"
+        ▼
+contre-verifier (skill-controleur-de-controle)   ← nouveau
+        │  "le verdict ci-dessus tient-il debout ?"
+        ▼
+   CONFIRME · ou · A_RECONSIDERER
+```
+
+`skill-controleur-de-controle` (nouveau) n'audite pas la réponse
+originale — il audite le *verdict* du premier contrôleur : cohérence
+entre `statut` et `verifications`, score plausible au vu des problèmes
+listés, contrôle réellement complet, outils de vérification réellement
+utilisés (pas un jugement "à l'œil"). Il ne remplace jamais le verdict de
+son propre chef (voir sa règle d'or) — un désaccord
+(`verdict_final: A_RECONSIDERER`) est seulement *signalé* dans la sortie
+du workflow (`verdict_meta`, `divergences_meta`) et empêche
+`reponse_finale` d'être renvoyée automatiquement, même si le premier
+contrôleur avait dit `VALIDE`. Un désaccord déclenche aussi
+`skill-apprendre-des-echecs` et le cycle d'auto-amélioration, au même
+titre qu'un échec de tâche classique.
+
+C'est un choix délibéré de ne pas automatiser la résolution du
+désaccord : un contrôle qui se contente de voter à la majorité entre deux
+agents n'est pas plus fiable qu'un seul — juste plus rassurant en
+apparence (voir `06-data/personnalite/valeurs.md` : l'honnêteté sur ce
+qu'on sait et ne sait pas prime sur l'apparence de certitude).
 
 ## 🔄 Auto-itération et auto-implémentation
 
@@ -311,11 +367,14 @@ indexe automatiquement ; aucun changement de code n'est nécessaire.
 ```
 dsh-harness/
 ├── .gitignore               # logs/, 06-data/memoire/, 02-plugins/, meta-index.json...
-├── 01-skills/              # 17 skills (+ boucles-agentiques, gestion-memoire, auto-implementation,
-│                            #   ameliorateur-systeme séparé de ameliorateur, decision-rapide)
+├── 01-skills/              # 18 skills (+ boucles-agentiques, gestion-memoire, auto-implementation,
+│                            #   ameliorateur-systeme séparé de ameliorateur, decision-rapide,
+│                            #   controleur-de-controle)
 ├── 02-plugins/              # agentic-research, dsh-find-plugins (clonés à l'install)
 ├── 03-workflows/            # 5 workflows JSON (schéma non-vérifiable formellement)
-│   └── auto-amelioration.workflow.json   # propose → évalue → applique (auto-implementer.js)
+│   ├── auto-amelioration.workflow.json   # propose → évalue → applique (auto-implementer.js)
+│   ├── controle-qualite.workflow.json    # v2.2.0 : + étape contre-verifier (double contrôle)
+│   └── systeme-auto-ameliorant-avec-controle.workflow.json  # v1.3.0 : identifier-meilleur via decision-rapide.js
 ├── 04-scripts/
 │   ├── dsh-logger.js         # logs structurés + SILENT_ERROR (testé)
 │   ├── errors-cli.js         # consultation CLI du journal (testé)
