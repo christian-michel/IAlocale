@@ -756,13 +756,52 @@ cette nouvelle étape — c'est une instruction plus simple à exécuter qu'à
 ignorer, mais ça reste une hypothèse tant que ce n'est pas confirmé sur
 la vraie machine.
 
+### Round 9 — le round 8 n'avait jamais été vraiment testé : chemin de skills périmé
+
+Premier passage réel du round 8 : toujours 0 occurrence pour
+`controleur-qualite`. Un test ciblé `--json` a montré pourquoi — pas une
+histoire de modèle qui ignore la consigne, cette fois : le `tool_result`
+du `tool_call` `"tool":"skill","name":"controle-qualite"` renvoyait
+encore le **contenu d'avant le round 8**, sans la section "Consignation
+obligatoire". Révélateur dans le même résultat :
+```
+Base directory for this skill: /Users/jarvis/.../IAlocale-claude-determined-pasteur-50jhkd/01-skills
+```
+— l'ANCIEN dossier (celui d'avant le reclonage du round 7), pas
+`IAlocale-git`.
+
+Cause : `configurer-skills-dsh.sh` **ajoutait** à `customSkillDirs` au
+lieu de remplacer. Après le reclonage, la liste contenait les deux
+chemins (`[..."-claude-determined-pasteur-50jhkd/01-skills",
+".../IAlocale-git/01-skills"]`) — les deux dossiers déclarant un skill du
+même nom (`controle-qualite`), `dsh` semble servir celui du **premier**
+chemin de la liste, resté périmé. Autrement dit : le round 8 n'avait
+jamais été réellement exercé, le modèle recevait encore les anciennes
+instructions sans la nouvelle étape obligatoire.
+
+**Corrigé** : `configurer-skills-dsh.sh` remplace maintenant
+`customSkillDirs` par un tableau à une seule entrée (le chemin courant)
+au lieu d'y ajouter — ce projet n'a jamais qu'un seul checkout actif à la
+fois, il n'y a donc aucune raison légitime d'en accumuler plusieurs.
+Testé contre un faux `~/.dsh/profiles/` avec deux anciens chemins déjà
+présents : les deux sont bien retirés, un seul chemin (le courant)
+survit.
+
+**Reste à faire, côté utilisateur** : relancer
+`./04-scripts/configurer-skills-dsh.sh` (purge les anciens chemins) puis
+refaire le test ciblé `--json` du round 8 — c'est seulement à partir de
+là que l'efficacité réelle de l'étape de consignation obligatoire pourra
+être évaluée pour la première fois.
+
 ### Où ça en est
 
 Les quatre blocages qui empêchaient toute validation réelle sont levés
 (round 5 : serveur sain ; round 6 : skills visibles ; round 7 :
 confabulation infirmée, git réparé par reclonage ; round 8 : contrôle
-qualité rendu contraignant). Reste à confirmer sur la vraie machine si le
-modèle suit réellement la nouvelle étape de consignation.
+qualité rendu contraignant). Round 9 a trouvé et corrigé un bug qui
+invalidait silencieusement le test du round 8 (chemin de skills périmé
+après reclonage) — son efficacité réelle reste à confirmer sur la vraie
+machine, pour de vrai cette fois.
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 

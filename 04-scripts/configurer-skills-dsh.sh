@@ -19,6 +19,15 @@
 # D'où le calcul du chemin absolu de ce dépôt plutôt qu'un chemin écrit en
 # dur : le nom du dossier change d'un checkout à l'autre (voir le piège
 # "Download ZIP" déjà documenté dans auto-implementer.js).
+#
+# REMPLACE la liste plutôt que d'y ajouter (bug trouvé en pratique, round
+# 9 — voir README) : après un reclonage dans un nouveau dossier, l'ancien
+# chemin restait dans customSkillDirs à côté du nouveau, et dsh servait le
+# contenu de skill-controleur-qualite.md de l'ANCIEN dossier (périmé,
+# sans les correctifs du round 8) — les deux dossiers déclarant un skill
+# du même nom, dsh prend apparemment le premier de la liste. Ce projet
+# n'a jamais qu'un seul checkout actif à la fois : customSkillDirs ne
+# doit donc jamais contenir plus d'une entrée.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 HARNESS_HOME="$(pwd)"
@@ -84,15 +93,19 @@ if entree is None:
     entree = {"id": "skill-filesystem", "name": "@deepseek-ai/dsh-skill-filesystem", "config": {}}
     patch.append(entree)
 entree.setdefault("config", {})
-dirs = entree["config"].setdefault("customSkillDirs", [])
-if skills_dir not in dirs:
-    dirs.append(skills_dir)
+# REMPLACE (pas d'ajout) : un seul checkout actif à la fois, voir
+# commentaire en tête de ce script (round 9 — ancien chemin resté en
+# plus du nouveau après un reclonage, dsh servait le contenu périmé).
+anciens = entree["config"].get("customSkillDirs", [])
+if anciens and anciens != [skills_dir]:
+    print(f"ℹ️  Anciens chemins retirés de customSkillDirs : {[d for d in anciens if d != skills_dir]}")
+entree["config"]["customSkillDirs"] = [skills_dir]
 
 with open(patch_path, "w") as f:
     f.write(entete)
     yaml.safe_dump(patch, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
-print(f"✅ {patch_path} mis à jour — customSkillDirs : {dirs}")
+print(f"✅ {patch_path} mis à jour — customSkillDirs : [{skills_dir}]")
 PYEOF
 done
 
