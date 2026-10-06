@@ -139,8 +139,22 @@ for composant in decision-rapide controleur-de-controle controleur-qualite ameli
     N=$(grep -o "\"component\":\"$composant\"" "$DOSSIER/4-logs-recents.json" 2>/dev/null | wc -l | tr -d ' ')
     journal "  $composant : $N occurrence(s)"
 done
-journal "Un composant à 0 occurrence pendant les tests 3a/3b signifie qu'il ne s'est"
-journal "probablement pas engagé — à noter explicitement dans ce qui est renvoyé."
+# ATTENTION, trouvé en pratique (round 7, voir README "Validation sur
+# machine réelle") : decision-rapide et auto-implementer sont des
+# SCRIPTS Node instrumentés avec dsh-logger.js — un 0 occurrence pour
+# eux est un vrai signal d'absence d'engagement. controleur-de-controle
+# et controleur-qualite sont des SKILLS (texte renvoyé par le tool
+# "skill" de dsh, jamais exécuté comme script) — rien dans leur
+# mécanisme n'écrit jamais ici, qu'ils aient été invoqués ou non. Un 0
+# occurrence pour ces deux-là ne prouve RIEN sur leur engagement réel.
+# Pour vérifier s'ils ont vraiment été invoqués, il faut relire le flux
+# brut d'un appel dsh --json et chercher un tool_call avec
+# "tool":"skill" et le bon "name" dans son "input" — pas ce journal.
+journal "decision-rapide et auto-implementer : un 0 ici signale une vraie absence d'engagement."
+journal "controleur-de-controle et controleur-qualite : ce sont des skills, pas des scripts —"
+journal "rien n'écrit jamais ici pour eux, qu'ils aient tourné ou non. Pour vérifier leur"
+journal "engagement réel, relis le flux d'un appel 'dsh --json' et cherche un tool_call"
+journal "\"tool\":\"skill\" avec le bon nom dans \"input\"."
 journal ""
 
 # --- 5. Auto-implémentation : cas valide et cas invalide ---

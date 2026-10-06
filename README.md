@@ -642,16 +642,74 @@ de `01-skills/` avec leurs vraies descriptions (`ameliorateur-systeme`,
 `decision-rapide`, `controleur-de-controle`, etc.) — plus aucun ID
 numérique interne.
 
+### Round 7 — le protocole complet tourne enfin ; ce qu'il révèle vraiment
+
+`./04-scripts/suite-tests-reelle.sh` lancé en entier pour la première
+fois avec un serveur sain et les skills visibles :
+
+- **Section 2 (décision rapide, 3 domaines)** : ✅ sans réserve — rapide
+  (856 à 1815 ms), confiance 0.9-0.95, justification cohérente sur le cas
+  comptable.
+- **Section 3 (HTML5, WordPress)** : les fichiers existent bien sur le
+  disque, contenu correct (vérifié directement, pas seulement le texte de
+  `dsh`) — **pas de confabulation**, hypothèse initiale de ce round
+  infirmée.
+- **Section 4 (traces dans les logs)** : 0 occurrence pour tous les
+  composants, y compris `controleur-qualite` — mais **ce chiffre ne
+  voulait rien dire pour ce composant-là**, voir plus bas. Corrigé dans
+  le script.
+- **Section 5 (auto-implémentation)** : `not a git repository` — confirmé
+  pour de vrai cette fois (`git status` échoue aussi en dehors de
+  `auto-implementer.js`). Ce dossier n'est effectivement pas un vrai
+  `git clone` (cause déjà pressentie au round 2, jamais vérifiée
+  directement jusqu'ici). **À corriger côté utilisateur, pas dans ce
+  dépôt** : recloner proprement
+  (`git clone -b claude/determined-pasteur-50jhkd <url> <nouveau-dossier>`),
+  rien à migrer (la config `dsh`/Ollama est globale à la machine).
+
+Un test ciblé en plus, avec `--json` et permissions débloquées, pour
+voir ce qui se passe vraiment derrière le texte final de `dsh` :
+
+1. **Le skill `controle-qualite` est réellement invoqué** — un vrai
+   `tool_call` avec `"tool":"skill","input":{"name":"controle-qualite"}`
+   apparaît dans le flux, avec ses instructions complètes renvoyées en
+   retour. La section 4 ne peut donc **pas** servir à juger de cet
+   engagement : `controleur-qualite`/`controleur-de-controle` sont des
+   skills (texte renvoyé par `dsh`), pas des scripts instrumentés avec
+   `dsh-logger.js` comme `decision-rapide`/`auto-implementer` — rien
+   n'écrit jamais dans ce journal pour eux, qu'ils tournent ou non. Un 0
+   occurrence pour ces deux-là ne prouvait rien ; **corrigé** dans
+   `suite-tests-reelle.sh` (message explicite sur cette distinction,
+   plutôt que l'ancienne conclusion erronée "ne s'est probablement pas
+   engagé").
+2. **Mais une fois chargé, le skill n'est pas vraiment suivi.** Ses
+   instructions demandent d'appeler `node 04-scripts/errors-cli.js
+   summary --hours 24`, d'utiliser `testeur-docker` pour le code, et de
+   produire un verdict JSON structuré (`{"statut": "VALIDE", "score":
+   ...}`). Aucune de ces trois choses n'a lieu dans le flux observé — le
+   modèle écrit juste en prose libre "*Le contrôle qualité a déjà été
+   effectué*" sans l'avoir fait. Sur un modèle local de cette taille
+   (30B Q4), le skill semble lu comme une information de contexte plutôt
+   que comme une checklist contraignante à dérouler. **Pas corrigé** :
+   c'est un choix de conception (renforcer le skill pour le rendre
+   contraignant et traçable, par exemple avec une étape finale
+   obligatoire qui logue via `dsh-logger.js`, vs. accepter cette limite
+   documentée pour un modèle de cette taille) — à trancher avant d'y
+   toucher, pas une décision à prendre seul.
+3. Détail annexe, pas un bug : `write` refuse d'écrire hors du dossier du
+   projet sans lecture préalable (confirmé : échoue sur `/tmp/...`,
+   réussit immédiatement en chemin relatif dans le projet) — ressemble à
+   une frontière de sandbox volontaire. Le modèle a contourné
+   intelligemment via `bash cp` plutôt que d'abandonner.
+
 ### Où ça en est
 
-Les deux blocages qui empêchaient toute validation réelle sont levés
-(round 5 : le serveur répond ; round 6 : il voit les skills du projet).
-Prochaine étape naturelle : relancer le protocole complet,
-`./04-scripts/suite-tests-reelle.sh`, maintenant que les deux
-prérequis qu'il vérifiait en vain jusqu'ici sont satisfaits — en
-particulier ses sections 3 (pipeline de contrôle qualité engagé ou non
-sur les tests HTML5/WordPress) et 4 (traces des composants dans les
-logs), qui n'avaient jamais pu tourner pour de vrai.
+Trois des quatre blocages qui empêchaient toute validation réelle sont
+levés (round 5 : serveur sain ; round 6 : skills visibles ; round 7 :
+confabulation infirmée, vraie méthode de vérification clarifiée). Reste
+ouvert, côté utilisateur : recloner proprement le dépôt (section 5).
+Reste ouvert, côté conception : que faire du contrôle qualité chargé
+mais pas vraiment exécuté (point 2 ci-dessus).
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
