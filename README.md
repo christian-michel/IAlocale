@@ -1071,11 +1071,16 @@ local, jamais à Internet — aucun port n'est ouvert sur la box/routeur.
 Le token dans l'URL reste la seule protection ; ne partage jamais ce lien
 tel quel.
 
-**Pas testé en conditions réelles** (pas de macOS dans cet environnement) :
-la génération du `.app` et du `plist` a été validée (XML bien formé,
-chemins absolus corrects, contre un faux `$HOME`/`launchctl` simulés),
-mais jamais le comportement réel de `launchctl`, ni la connexion depuis
-un vrai téléphone.
+**Testé en conditions réelles, un piège trouvé** : si ce dépôt vit sous
+`~/Documents` (ou `~/Desktop`/`~/Downloads`), le `LaunchAgent` échoue en
+boucle avec `Operation not permitted` — macOS protège ces dossiers (TCC,
+depuis Mojave) contre tout accès par un processus sans interface
+graphique, `/bin/bash` ne peut même pas lire le script pour l'exécuter.
+Deux solutions : déplacer le dépôt ailleurs sous `$HOME` (la plus
+propre), ou autoriser `/bin/bash` dans Réglages Système > Confidentialité
+et sécurité > Accès complet au disque — donne un accès disque large à
+toute commande bash sur la machine, pas seulement ce projet, donc un vrai
+arbitrage à faire en connaissance de cause plutôt qu'un réglage anodin.
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 

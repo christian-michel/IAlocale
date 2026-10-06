@@ -28,3 +28,9 @@ logs/
 
 # Au cas où un outil futur ajoute un package.json local.
 node_modules/
+
+# Fichiers créés directement à la racine par des tests --json manuels
+# (voir README, "Validation sur machine réelle") — ont bloqué la section
+# 5 de suite-tests-reelle.sh ("arbre de travail non propre") à plusieurs
+# reprises faute d'avoir été nettoyés après coup.
+test-round*.html
