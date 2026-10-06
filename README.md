@@ -403,10 +403,15 @@ cd ~/dsh-harness
 # 3. Vérifier que le contexte réellement servi correspond
 ollama run qwen3-coder:30b-a3b-q4_K_M 'bonjour' >/dev/null && ollama ps
 
-# 4. Premier test en tâche unique (headless), avant de passer en mode web (étape 5)
+# 4. Premier test en tâche unique (headless) — crée aussi le profil
+#    ~/.dsh/profiles/headless/, nécessaire à l'étape 5
 dsh --profile headless 'Explique-moi ce que fait 04-scripts/dsh-logger.js'
 
-# 5. Lancement complet
+# 5. Déclarer 01-skills/ de ce dépôt auprès de dsh (sinon il ne voit que
+#    ses skills internes, voir "Validation sur machine réelle", round 6)
+./04-scripts/configurer-skills-dsh.sh
+
+# 6. Lancement complet
 ./start.sh
 ```
 
@@ -590,6 +595,50 @@ la même cause.
 testée pour de vrai, le serveur étant resté cassé jusqu'ici. À relancer
 maintenant que le serveur répond :
 `dsh --profile headless "Liste les skills que tu as à disposition."`.
+
+### Round 6 — `dsh` ne voit que ses skills internes, corrigé
+
+Le test ci-dessus a été lancé : réponse obtenue (le serveur répond
+désormais, round 5), mais uniquement des ID numériques internes
+(`skill_30103000534672`, etc. — le préréglage `cordis` de `dsh`), aucun
+des skills de ce dépôt. **Point 6 du round 2 tranché** : confirmé, `dsh`
+ne voyait pas `01-skills/`.
+
+Cause trouvée sans deviner, via `dsh --dump-config-schema` (nouvelle
+option découverte dans `dsh --help`, qui n'était pas documentée dans ce
+projet avant) : le plugin `skill-filesystem` accepte une clé
+`customSkillDirs` — tableau de chemins absolus, défaut `[]` :
+```json
+"customSkillDirs": {"default": [], "anyOf": [{"type": ["array", "null"],
+"items": {"type": ["string", "null"]}}, ...]}
+```
+Rien ne la renseignait dans les profils `headless`/`web` de cette
+machine — d'où le repli sur les skills internes.
+
+**Corrigé** : nouveau script `04-scripts/configurer-skills-dsh.sh`, qui
+fusionne une entrée `skill-filesystem` → `config.customSkillDirs` dans
+`~/.dsh/profiles/<profil>/cordis.patch.yml`, pour `headless` et `web`.
+Deux précautions, par analogie avec les pièges déjà rencontrés dans ce
+projet :
+- Le chemin est calculé (jamais écrit en dur) — le nom de ce dossier
+  change d'un checkout à l'autre (même piège "Download ZIP" que dans
+  `auto-implementer.js`).
+- Ce fichier de patch autorise explicitement des expressions `!!js` dans
+  son propre commentaire d'en-tête — un aller-retour
+  `yaml.safe_load`/`safe_dump` les corromprait. Le script refuse de
+  toucher au fichier si une vraie expression `!!js` y est détectée (en
+  excluant les lignes de commentaire de cette recherche : testé que le
+  commentaire d'en-tête lui-même, qui *mentionne* `!!js` sans l'utiliser,
+  ne déclenche plus de faux positif). Préserve aussi ce commentaire
+  d'en-tête, que PyYAML aurait sinon supprimé.
+
+Testé : fusion sur un fichier avec contenu existant (entrées préservées),
+sur un fichier minimal, idempotence sur deux passages (pas de doublon de
+chemin), et refus confirmé face à un vrai `!!js` — contre de faux
+`~/.dsh/profiles/`, jamais la vraie machine depuis cet environnement.
+**Pas encore confirmé en conditions réelles** : à vérifier avec
+`dsh --profile headless "Liste les skills que tu as à disposition."`
+après avoir lancé `./04-scripts/configurer-skills-dsh.sh`.
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
