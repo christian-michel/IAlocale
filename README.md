@@ -787,11 +787,24 @@ Testé contre un faux `~/.dsh/profiles/` avec deux anciens chemins déjà
 présents : les deux sont bien retirés, un seul chemin (le courant)
 survit.
 
-**Reste à faire, côté utilisateur** : relancer
-`./04-scripts/configurer-skills-dsh.sh` (purge les anciens chemins) puis
-refaire le test ciblé `--json` du round 8 — c'est seulement à partir de
-là que l'efficacité réelle de l'étape de consignation obligatoire pourra
-être évaluée pour la première fois.
+**Confirmé juste après, en conditions réelles** : une fois
+`configurer-skills-dsh.sh` relancé (chemin purgé) et un nouveau test
+ciblé `--json` lancé, le skill chargé contenait bien la section 5 du
+round 8 — et cette fois, `dsh` a réellement exécuté, via l'outil bash :
+```
+node 04-scripts/consigner-verdict-qualite.js --composant controleur-qualite --statut VALIDE --score 9.5 --commentaire "..."
+```
+avec un `tool_result` confirmant le log écrit. **Le mécanisme du round 8
+fonctionne, confirmé de bout en bout pour la première fois.** Détail
+cosmétique sans gravité observé sur ce même passage : la réponse finale
+du modèle se termine par un `<tool_call>` résiduel (un appel d'outil
+amorcé juste avant la fin du tour) — artefact du modèle, pas un bug de
+ces scripts.
+
+Reste à confirmer : que `controleur-de-controle` (second niveau, jamais
+testé isolément) suit la même discipline, et qu'un passage complet de
+`suite-tests-reelle.sh` (pas seulement un test ciblé) fait enfin
+apparaître un vrai signal en section 4.
 
 ### Où ça en est
 
@@ -800,8 +813,11 @@ Les quatre blocages qui empêchaient toute validation réelle sont levés
 confabulation infirmée, git réparé par reclonage ; round 8 : contrôle
 qualité rendu contraignant). Round 9 a trouvé et corrigé un bug qui
 invalidait silencieusement le test du round 8 (chemin de skills périmé
-après reclonage) — son efficacité réelle reste à confirmer sur la vraie
-machine, pour de vrai cette fois.
+après reclonage), **puis confirmé en conditions réelles que le mécanisme
+de consignation obligatoire fonctionne** : premier verdict de
+`controleur-qualite` réellement loggé, de bout en bout, sur la vraie
+machine. Reste à vérifier sur un passage complet du protocole plutôt
+qu'un test ciblé, et à confirmer `controleur-de-controle` séparément.
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
