@@ -981,6 +981,46 @@ reboot, déjà documenté. Résolu en relançant simplement
 `./04-scripts/setup-local-model.sh`, comme prévu depuis le round 5.
 Confirmé par `ollama run ... "Dis juste bonjour."` → `Bonjour ! 😊`.
 
+### Round 13 — `suite-tests-reelle.sh` affirme désormais des résultats, au lieu de seulement les décrire
+
+Après 12 rounds à relire le texte du script pour juger à l'œil si un
+résultat était bon, le script fait maintenant le travail lui-même.
+Nouveaux contrôles, qui font échouer le script (code de sortie 1) plutôt
+que de se contenter d'informer — chacun correspond à une régression
+réellement rencontrée dans les rounds précédents :
+
+- **A.1** : `ollama ps` montre bien 32768 de contexte (round 4 : servait
+  4096 sans rien signaler).
+- **A.2** : `iogpu.wired_limit_mb` ≠ 0 (round 4/5/12 : revient à 0 après
+  chaque redémarrage, cause du crash GPU Metal).
+- **A.3** : `dsh` voit les skills du dépôt, pas seulement ses ID internes
+  (round 6/9 : `customSkillDirs` périmé après un reclonage).
+- **A.4** : l'outil de recherche web cloud est désactivé (round 12 :
+  câblé sur l'API DeepSeek, jamais utile en local).
+- **C.7** : un *nouveau* verdict `controleur-qualite` a bien été
+  consigné sur les tâches 3a/3b (compare un compte "avant"/"après" dans
+  les deux emplacements possibles — dépôt et repli `~/dsh-harness/`, voir
+  round 11 — plutôt que de se fier au texte de `dsh`).
+- **D.14** : aucune syntaxe d'appel d'outil malformée (`<function=`,
+  `<tool_call>` résiduel...) n'a fuité dans le texte final de 3a/3b — le
+  glitch rencontré lors du dernier passage réel.
+
+Bug trouvé et corrigé en testant ces contrôles avant de les livrer (contre
+un faux dépôt avec `dsh`/`ollama` simulés, jamais la vraie machine depuis
+cet environnement) : `grep -c motif fichier 2>/dev/null || echo 0`
+imprime **"0"** ET sort en code 1 quand le fichier existe avec zéro
+correspondance — le `|| echo 0` se déclenchait quand même, doublant la
+sortie capturée (`"0\n0"`) et cassant l'arithmétique du delta
+avant/après. Remplacé par le pattern déjà utilisé ailleurs dans ce script
+(`grep -o ... | wc -l`), qui n'a pas ce défaut. Testé : un scénario où
+tout doit passer (0 échec, code 0) et un scénario où les 5 contrôles
+doivent simultanément détecter un vrai problème injecté (5 échecs, code
+1) — les deux confirmés avant de pousser.
+
+**Pas encore confirmé en conditions réelles** : ces contrôles n'ont
+tourné que contre un dépôt jetable avec `dsh`/`ollama` simulés depuis cet
+environnement — jamais la vraie machine.
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée

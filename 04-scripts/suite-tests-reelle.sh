@@ -10,6 +10,11 @@
 # faire sur de vraies données, pas des suppositions.
 #
 # Ce script couvre :
+#   A. Santé d'infrastructure — chacun de ces 4 contrôles a déjà, une
+#      fois, invalidé silencieusement tout le reste (voir README) :
+#      A.1 contexte Ollama réellement servi, A.2 mémoire GPU
+#      (iogpu.wired_limit_mb), A.3 dsh voit les skills du dépôt,
+#      A.4 l'outil de recherche web cloud est désactivé
 #   1. Validation syntaxique déterministe (skills/workflows)
 #   2. decision-rapide.js sur 3 domaines (code, juridique, comptable),
 #      contre ton vrai modèle configuré
@@ -19,10 +24,18 @@
 #      controle -> identifier-meilleur/decision-rapide) s'engage
 #      réellement, ce qui n'a jamais pu être confirmé depuis mon
 #      environnement
-#   4. Comptage des traces de chaque composant dans les logs structurés
+#   4. Comptage des traces de chaque composant dans les logs structurés,
+#      et C.7 : vérifie qu'un NOUVEAU verdict controleur-qualite a bien
+#      été consigné sur les tâches 3a/3b (pas juste une trace générique)
+#   D.14. Détection d'une syntaxe d'appel d'outil malformée qui aurait
+#      fuité dans le texte final de 3a/3b, au lieu d'un vrai tool_call
 #   5. Auto-implementer.js : un cas qui doit fusionner, un cas qui doit
 #      être refusé — sur un fichier clairement jetable, sans risque pour
 #      le reste du dépôt
+#
+# Contrairement aux sections historiques (1 à 5, purement informatives),
+# les contrôles A/C.7/D.14 affirment un résultat attendu : le script
+# sort en code 1 si l'un d'eux échoue, en 0 sinon.
 #
 # Usage : ./04-scripts/suite-tests-reelle.sh
 # Durée attendue : plusieurs minutes (les étapes 3a/3b dépendent
@@ -36,6 +49,16 @@ DOSSIER="logs/validation-$HORODATAGE"
 mkdir -p "$DOSSIER"
 
 journal() { echo "$1" | tee -a "$DOSSIER/resume.txt"; }
+
+# Compteur d'échecs réels : contrairement aux sections historiques de ce
+# script (purement informatives — "note ce que tu vois"), les contrôles
+# A/C.7/D.14 ci-dessous affirment un résultat attendu et comptent comme
+# échec s'il n'est pas atteint. Le code de sortie du script en dépend.
+ECHECS=0
+signaler_echec() {
+    ECHECS=$((ECHECS + 1))
+    journal "   ❌ ÉCHEC : $1"
+}
 
 journal "=== Protocole de validation — $HORODATAGE ==="
 journal ""
@@ -66,6 +89,45 @@ if [ -n "$MODELE_DETECTE" ]; then
     journal "Modèle utilisé pour la section 2 (détecté via 'ollama list') : $MODELE_DETECTE"
 else
     journal "ATTENTION : aucun modèle détecté via 'ollama list' — la section 2 va probablement échouer."
+fi
+journal ""
+
+# --- A. Santé d'infrastructure ---
+# Contrôles rapides ajoutés après plusieurs régressions concrètes
+# rencontrées en conditions réelles (voir README, "Validation sur
+# machine réelle") — chacun fait réellement échouer le script plutôt que
+# de se contenter d'informer, puisque chacun a déjà, une fois, invalidé
+# silencieusement tout ce qui suivait.
+journal "--- A. Santé d'infrastructure ---"
+
+journal "  A.2. Mémoire GPU (iogpu.wired_limit_mb)"
+if [ "$(uname)" = "Darwin" ]; then
+    LIMITE_GPU=$(sysctl -n iogpu.wired_limit_mb 2>/dev/null || echo "?")
+    if [ "$LIMITE_GPU" = "0" ] || [ "$LIMITE_GPU" = "?" ]; then
+        signaler_echec "A.2 : iogpu.wired_limit_mb=$LIMITE_GPU (automatique ou illisible) — ne survit pas à un redémarrage, relance ./04-scripts/setup-local-model.sh (voir README round 4/5/12)."
+    else
+        journal "     ✅ iogpu.wired_limit_mb=$LIMITE_GPU"
+    fi
+else
+    journal "     (non macOS — contrôle ignoré)"
+fi
+
+journal "  A.3. dsh voit les skills de ce dépôt, pas seulement ses ID internes"
+SORTIE_SKILLS=$(dsh --profile headless "Liste les skills que tu as à disposition." 2>&1)
+if echo "$SORTIE_SKILLS" | grep -qiE "decision-rapide|controle-qualite|ameliorateur"; then
+    journal "     ✅ dsh voit les skills du dépôt"
+elif echo "$SORTIE_SKILLS" | grep -qE "skill_[0-9]+"; then
+    signaler_echec "A.3 : dsh ne renvoie que des ID numériques internes — relance ./04-scripts/configurer-skills-dsh.sh (voir README round 6/9)."
+else
+    signaler_echec "A.3 : réponse inattendue de dsh, impossible de confirmer — sortie : $(echo "$SORTIE_SKILLS" | head -c 300)"
+fi
+
+journal "  A.4. Outil de recherche web cloud désactivé"
+SORTIE_DUMP=$(dsh --profile headless --dump-config 2>&1)
+if echo "$SORTIE_DUMP" | grep -A10 "id: tool-web" | grep -q "disabled: true"; then
+    journal "     ✅ tool-web désactivé (pas d'appel possible vers l'API cloud DeepSeek)"
+else
+    signaler_echec "A.4 : tool-web ne semble pas désactivé — relance ./04-scripts/desactiver-recherche-web-cloud.sh (voir README round 12)."
 fi
 journal ""
 
@@ -102,6 +164,15 @@ node 04-scripts/decision-rapide.js \
     2>&1 | tee "$DOSSIER/2c-decision-comptable.json"
 journal ""
 
+journal "  A.1. Contexte réellement servi par Ollama (modèle chargé par la section 2)"
+LIGNE_PS=$(ollama ps 2>/dev/null | grep "$MODELE_DETECTE" || true)
+if echo "$LIGNE_PS" | grep -q "32768"; then
+    journal "     ✅ Contexte 32768 confirmé : $LIGNE_PS"
+else
+    signaler_echec "A.1 : contexte 32768 non confirmé dans 'ollama ps' (ligne : '${LIGNE_PS:-vide, modèle probablement déjà déchargé}') — voir README 'Pourquoi OLLAMA_CONTEXT_LENGTH...'."
+fi
+journal ""
+
 # --- 3. Deux tests techniques de bout en bout via dsh ---
 journal "--- 3. Tests techniques via dsh (pipeline complet) ---"
 journal "Chaque appel peut prendre plusieurs minutes selon le modèle."
@@ -121,6 +192,13 @@ else
 fi
 journal ""
 
+# Repère "avant" pour C.7 (section 4) : compte les verdicts controleur-qualite
+# déjà présents dans les deux emplacements possibles (voir round 11 —
+# HARNESS_HOME n'est pas toujours transmis à l'outil bash de dsh, le
+# verdict peut atterrir dans le repli par défaut de dsh-logger.js).
+VERDICTS_AVANT_PROJET=$(grep -o '"component":"controleur-qualite"' "$HARNESS_HOME/logs/pipeline.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+VERDICTS_AVANT_REPLI=$(grep -o '"component":"controleur-qualite"' "$HOME/dsh-harness/logs/pipeline.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+
 journal "  3a. Page HTML5"
 mkdir -p "$DOSSIER/livrables"
 dsh --profile headless "Crée une page HTML5 complète et valide avec un titre, un paragraphe de description et un bouton. Sauvegarde-la dans $DOSSIER/livrables/test-html5.html. Avant de considérer la tâche terminée, fais vérifier le résultat par le contrôle qualité." \
@@ -129,6 +207,19 @@ dsh --profile headless "Crée une page HTML5 complète et valide avec un titre, 
 journal "  3b. Thème WordPress nommé test"
 dsh --profile headless "Crée un thème WordPress minimal nommé test (style.css avec l'en-tête Theme Name: test, index.php, functions.php). Sauvegarde les fichiers dans $DOSSIER/livrables/theme-test/. Avant de considérer la tâche terminée, fais vérifier le résultat par le contrôle qualité." \
     2>&1 | tee "$DOSSIER/3b-wordpress-sortie.txt"
+journal ""
+
+journal "  D.14. Détection de syntaxe d'appel d'outil malformée dans les réponses"
+PROBLEME_D14=0
+for FICHIER in "$DOSSIER/3a-html5-sortie.txt" "$DOSSIER/3b-wordpress-sortie.txt"; do
+    if grep -qE '<function=|<tool_call>|<parameter=' "$FICHIER" 2>/dev/null; then
+        signaler_echec "D.14 : syntaxe d'appel d'outil malformée détectée dans $(basename "$FICHIER") — glitch de template connu (voir README), un appel d'outil brut a fuité dans le texte final au lieu d'être exécuté."
+        PROBLEME_D14=1
+    fi
+done
+if [ "$PROBLEME_D14" -eq 0 ]; then
+    journal "     ✅ Aucune syntaxe d'appel d'outil malformée détectée"
+fi
 journal ""
 
 # --- 4. Traces du pipeline dans les logs ---
@@ -155,6 +246,20 @@ journal "controleur-de-controle et controleur-qualite : ce sont des skills, pas 
 journal "rien n'écrit jamais ici pour eux, qu'ils aient tourné ou non. Pour vérifier leur"
 journal "engagement réel, relis le flux d'un appel 'dsh --json' et cherche un tool_call"
 journal "\"tool\":\"skill\" avec le bon nom dans \"input\"."
+journal ""
+
+journal "  C.7. Verdict controleur-qualite réellement consigné (via consigner-verdict-qualite.js)"
+VERDICTS_APRES_PROJET=$(grep -o '"component":"controleur-qualite"' "$HARNESS_HOME/logs/pipeline.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+VERDICTS_APRES_REPLI=$(grep -o '"component":"controleur-qualite"' "$HOME/dsh-harness/logs/pipeline.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+NOUVEAUX_PROJET=$((VERDICTS_APRES_PROJET - VERDICTS_AVANT_PROJET))
+NOUVEAUX_REPLI=$((VERDICTS_APRES_REPLI - VERDICTS_AVANT_REPLI))
+if [ "$NOUVEAUX_PROJET" -gt 0 ]; then
+    journal "     ✅ $NOUVEAUX_PROJET nouveau(x) verdict(s) consigné(s) dans $HARNESS_HOME/logs/pipeline.jsonl"
+elif [ "$NOUVEAUX_REPLI" -gt 0 ]; then
+    journal "     ⚠️  $NOUVEAUX_REPLI nouveau(x) verdict(s) trouvé(s), mais dans ~/dsh-harness/logs/pipeline.jsonl (repli par défaut) plutôt que dans le dépôt — problème HARNESS_HOME connu, voir README round 11. Le mécanisme fonctionne, pas un échec de ce contrôle."
+else
+    signaler_echec "C.7 : aucun nouveau verdict controleur-qualite consigné nulle part sur les tâches 3a/3b — l'étape obligatoire du round 8 (consigner-verdict-qualite.js) n'a probablement pas été suivie."
+fi
 journal ""
 
 # --- 5. Auto-implémentation : cas valide et cas invalide ---
@@ -205,3 +310,12 @@ journal "  git commit -m \"Retire le skill de test\""
 journal ""
 journal "Envoie le contenu de $DOSSIER/ pour analyse de cohérence, de pertinence,"
 journal "et pour identifier les causes de tout écart avec le résultat attendu."
+journal ""
+
+if [ "$ECHECS" -eq 0 ]; then
+    journal "=== Bilan : 0 échec sur les contrôles A/C.7/D.14 ==="
+    exit 0
+else
+    journal "=== Bilan : $ECHECS échec(s) sur les contrôles A/C.7/D.14 — voir le détail ❌ ci-dessus ==="
+    exit 1
+fi
