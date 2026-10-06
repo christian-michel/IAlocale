@@ -171,6 +171,24 @@ async function main() {
   }
 
   const brancheOrigine = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+
+  // Trouvé en pratique (voir README, "Validation sur machine réelle") :
+  // un échec inattendu PENDANT un cycle (ex. git commit qui plante) peut
+  // laisser le dépôt basculé sur une branche "auto-amelioration/*" sans
+  // jamais revenir en arrière — le catch-all de main() logue et quitte,
+  // mais ne fait pas de checkout de secours. Le cycle suivant repartait
+  // alors de cette branche temporaire au lieu de la vraie branche de
+  // l'utilisateur, empilant une branche temporaire sur une autre. Refuse
+  // de démarrer plutôt que d'empiler : c'est à l'utilisateur de revenir
+  // manuellement sur sa vraie branche (git checkout <branche>) et de
+  // nettoyer la branche orpheline avant de relancer.
+  if (/^auto-amelioration\//.test(brancheOrigine)) {
+    logError(COMPOSANT, `HEAD est sur une branche temporaire '${brancheOrigine}' — signe qu'un cycle précédent a planté sans nettoyer derrière lui. Refus de démarrer.`);
+    console.error(`❌ Tu es actuellement sur '${brancheOrigine}', une branche temporaire d'auto-implémentation — pas ta vraie branche de travail.`);
+    console.error(`   Reviens sur ta branche habituelle (ex. : git checkout <ta-branche>), puis supprime cette branche orpheline (git branch -D ${brancheOrigine}) avant de relancer.`);
+    process.exit(1);
+  }
+
   const horodatage = new Date().toISOString().replace(/[:.]/g, '-');
   const brancheAuto = `auto-amelioration/${horodatage}`;
 

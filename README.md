@@ -857,6 +857,46 @@ du round 9. Deux constats :
    même contenu renvoie `DEJA_A_JOUR` sans erreur, un seul commit de
    fusion dans l'historique (pas de doublon).
 
+### Round 11 — hypothèse `HARNESS_HOME` confirmée, et un effet de bord du crash du round 10 trouvé
+
+`cat ~/dsh-harness/logs/pipeline.jsonl` sur la vraie machine : **1
+occurrence** de `controleur-qualite`. Hypothèse du round 10 confirmée :
+le verdict est bien consigné par `consigner-verdict-qualite.js`, mais
+dans `~/dsh-harness/logs/` (repli par défaut de `dsh-logger.js`) plutôt
+que dans `logs/` du dépôt — l'outil bash de `dsh` n'hérite pas de
+`HARNESS_HOME` exporté par `suite-tests-reelle.sh`. **Pas corrigé ici** :
+une solution robuste demanderait soit que `consigner-verdict-qualite.js`
+calcule son propre `HARNESS_HOME` depuis l'emplacement du script plutôt
+que de dépendre d'une variable d'environnement (changerait aussi le
+comportement de `dsh-logger.js` partagé par tous les autres scripts),
+soit que `dsh` transmette les variables d'environnement à son outil
+bash — aucune des deux n'est une correction locale sûre sans plus
+d'investigation sur l'impact pour le reste du projet.
+
+Effet de bord trouvé en creusant cette même sortie : la section 5
+démarrait "depuis 'auto-amelioration/2026-10-06T07-17-53-175Z'" — pas la
+vraie branche de l'utilisateur. Cause : le crash du round 10 (avant son
+correctif) a planté *pendant* un cycle, alors que le dépôt était déjà
+basculé sur une branche temporaire — le chemin `catch` générique de
+`main()` logue l'erreur et quitte, mais ne fait jamais le `git checkout`
+de retour vers la branche d'origine (seul le chemin "proposition
+rejetée" le fait explicitement). Le cycle suivant repartait donc de
+cette branche temporaire au lieu de la vraie branche, risquant d'empiler
+des branches temporaires les unes sur les autres indéfiniment.
+
+**Corrigé** : `auto-implementer.js` détecte maintenant si `HEAD` est déjà
+sur une branche `auto-amelioration/*` au démarrage et refuse
+explicitement de continuer, avec un message qui dit quoi faire (revenir
+sur la vraie branche, supprimer la branche orpheline) — plutôt que
+d'empiler silencieusement. Testé contre un dépôt git jetable démarré
+directement sur une branche `auto-amelioration/test-orpheline` : refus
+confirmé, `HEAD` inchangé.
+
+**À faire côté utilisateur, en priorité** : vérifier sur quelle branche
+le dépôt se trouve réellement maintenant (`git branch`), revenir sur
+`claude/determined-pasteur-50jhkd` si nécessaire, et supprimer toute
+branche `auto-amelioration/*` orpheline qui aurait pu s'accumuler.
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée
