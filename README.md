@@ -702,14 +702,67 @@ voir ce qui se passe vraiment derrière le texte final de `dsh` :
    une frontière de sandbox volontaire. Le modèle a contourné
    intelligemment via `bash cp` plutôt que d'abandonner.
 
+Reclonage effectué côté utilisateur, confirmé par un second passage
+complet de `suite-tests-reelle.sh` : **section 5 fonctionne désormais
+intégralement** (5a fusionne, 5b est refusée avant écriture, logs
+`auto-implementer` présents) — le dernier blocage restant du round 7 est
+levé. `4-logs-recents.json` de ce passage confirme aussi, sans surprise,
+que seules les sections 1-2 (scripts instrumentés) apparaissent dans le
+journal — cohérent avec ce que ce round avait déjà établi sur les
+composants de type skill.
+
+Détail observé sur ce même passage, qui renforce le point 2 : en 3a,
+`dsh` a cette fois signalé lui-même *"j'ai rencontré une difficulté avec
+le contrôle qualité"* avant de se rabattre sur une vérification
+manuelle — plus honnête que l'affirmation sans réserve du round
+précédent, mais ça confirme que l'étape échoue ou est esquivée plutôt
+qu'exécutée jusqu'au bout.
+
+### Round 8 — rendre le contrôle qualité contraignant et traçable
+
+Décision prise (pas à l'aveugle, après constat du point 2) : plutôt que
+d'accepter la limite, renforcer les deux skills de contrôle pour qu'un
+modèle local de taille modeste les suive réellement. Constat de départ :
+ce genre de modèle suit plus fidèlement une instruction "exécute cette
+commande" qu'une instruction "termine ta réponse par cet objet JSON
+précis" — le second a été ignoré à chaque test réel jusqu'ici, alors que
+le premier est un geste mécanique unique.
+
+**Ajouté** : `04-scripts/consigner-verdict-qualite.js`, étape finale
+*obligatoire* (nouvelle section dans `skill-controleur-qualite.md` et
+`skill-controleur-de-controle.md`, intitulée "NE SAUTE JAMAIS CETTE
+ÉTAPE") — une seule commande bash qui transforme le verdict en événement
+loggé via `dsh-logger.js`, avec exactement les noms de composant
+(`controleur-qualite`, `controleur-de-controle`) que la section 4 de
+`suite-tests-reelle.sh` compte déjà depuis le début : le "0 occurrence"
+systématique pour ces deux-là devrait enfin devenir un vrai signal
+d'engagement une fois cette étape suivie.
+
+```bash
+node 04-scripts/consigner-verdict-qualite.js --composant controleur-qualite --statut VALIDE|INVALIDE|A_VERIFIER [--score 0-10] --commentaire "résumé en une phrase"
+```
+
+Périmètre volontairement restreint, même logique que `auto-implementer.js` :
+`--composant` limité aux deux valeurs ci-dessus, `--statut` limité aux
+trois valeurs attendues, `--score` validé entre 0 et 10 — refusé avant
+tout log sinon.
+
+Testé : les 4 cas de rejet (composant/statut/score/commentaire invalides),
+les 2 cas valides (`controleur-qualite`/VALIDE avec score,
+`controleur-de-controle`/A_VERIFIER sans score), contenu exact du
+JSONL vérifié. **Pas encore testé en conditions réelles** : reste à
+relancer `suite-tests-reelle.sh` pour voir si le modèle suit effectivement
+cette nouvelle étape — c'est une instruction plus simple à exécuter qu'à
+ignorer, mais ça reste une hypothèse tant que ce n'est pas confirmé sur
+la vraie machine.
+
 ### Où ça en est
 
-Trois des quatre blocages qui empêchaient toute validation réelle sont
-levés (round 5 : serveur sain ; round 6 : skills visibles ; round 7 :
-confabulation infirmée, vraie méthode de vérification clarifiée). Reste
-ouvert, côté utilisateur : recloner proprement le dépôt (section 5).
-Reste ouvert, côté conception : que faire du contrôle qualité chargé
-mais pas vraiment exécuté (point 2 ci-dessus).
+Les quatre blocages qui empêchaient toute validation réelle sont levés
+(round 5 : serveur sain ; round 6 : skills visibles ; round 7 :
+confabulation infirmée, git réparé par reclonage ; round 8 : contrôle
+qualité rendu contraignant). Reste à confirmer sur la vraie machine si le
+modèle suit réellement la nouvelle étape de consignation.
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 

@@ -21,6 +21,25 @@ Utilise le skill `testeur-docker` pour exécuter le code dans un environnement i
 ### 4. Historique d'erreurs
 Consulte `node 04-scripts/errors-cli.js summary --hours 24` avant de valider : si une erreur similaire (même composant, même type d'exception) s'est déjà produite récemment, signale-le explicitement au lieu de valider silencieusement.
 
+### 5. Consignation obligatoire du verdict — NE SAUTE JAMAIS CETTE ÉTAPE
+
+Une fois ton verdict déterminé (statut, score, commentaire), tu DOIS
+exécuter la commande suivante via l'outil bash, avant toute chose,
+**avant** d'écrire ta réponse finale :
+
+```bash
+node 04-scripts/consigner-verdict-qualite.js --composant controleur-qualite --statut <VALIDE|INVALIDE|A_VERIFIER> --score <0-10> --commentaire "<résumé en une phrase>"
+```
+
+Ce n'est pas optionnel, et ce n'est pas remplaçable par le JSON ci-dessous
+écrit dans ta réponse en texte libre : en conditions réelles, un verdict
+seulement écrit en prose (même avec le bon format JSON) n'a laissé aucune
+trace vérifiable après coup — voir `README.md`, "Validation sur machine
+réelle", round 7. Le contrôle qualité n'est considéré terminé qu'une fois
+cette commande exécutée avec succès (code de sortie 0). Si elle échoue
+(mauvais statut, score hors limites...), corrige les arguments et
+relance-la — ne continue jamais sans qu'elle ait réussi.
+
 ## Format de Sortie
 
 ```json

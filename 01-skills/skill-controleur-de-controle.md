@@ -35,6 +35,20 @@ ou en validant par complaisance plutôt que par vérification réelle.
    le contrôleur en a-t-il tenu compte comme sa propre consigne le lui
    demande ?
 
+## Consignation obligatoire du verdict — NE SAUTE JAMAIS CETTE ÉTAPE
+
+Une fois ton propre verdict déterminé, tu DOIS exécuter, via l'outil
+bash, avant d'écrire ta réponse finale :
+
+```bash
+node 04-scripts/consigner-verdict-qualite.js --composant controleur-de-controle --statut <VALIDE si verdict_final=CONFIRME, A_VERIFIER si verdict_final=A_RECONSIDERER> --score <0-10, ta confiance dans le verdict du premier niveau> --commentaire "<résumé en une phrase>"
+```
+
+Même raison qu'au premier niveau (voir `skill-controleur-qualite.md`) :
+en conditions réelles, un verdict seulement écrit en texte libre n'a
+laissé aucune trace vérifiable — voir `README.md`, "Validation sur
+machine réelle", round 7. Cette étape n'est pas optionnelle.
+
 ## Ce que tu ne fais PAS
 
 Tu ne remplaces pas le verdict du contrôleur par le tien de ta propre
