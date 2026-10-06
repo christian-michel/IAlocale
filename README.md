@@ -950,9 +950,36 @@ ajout d'une nouvelle entrée quand `tool-web` est absent, préservation de
 la config existante plus ajout de `disabled: true` quand il est déjà
 présent, idempotent sur deux passages.
 
-**Pas encore confirmé en conditions réelles** : reste à lancer ce script
-puis à relancer `suite-tests-reelle.sh` pour vérifier que les tâches
-3a/3b ne dévient plus vers une tentative de recherche web.
+**Confirmé en conditions réelles** — avec une fausse alerte en cours de
+route qui vaut la peine d'être documentée : un premier
+`dsh --dump-config | grep -A3 "id: tool-web"` semblait montrer
+`tool-web` toujours actif (`config: {fetch: true}`, pas de `disabled`).
+Panique prématurée : `disabled: true` apparaît en réalité 5 lignes après
+le match, hors de la fenêtre `-A3` demandée. Avec plus de contexte
+(`sed -n` sur une plage plus large), confirmé sans ambiguïté :
+```yaml
+# == @deepseek-ai/dsh-base, patched by .../cordis.patch.yml
+- id: tool-web
+  config:
+    fetch: true
+    searchTimeoutMs: 60000
+  disabled: true
+```
+Le marqueur `# == @deepseek-ai/dsh-base, patched by ...` confirme que
+c'est bien la vue fusionnée (config de base + notre patch) — le
+mécanisme fonctionne exactement comme prévu dès le premier essai, rien à
+corriger. Leçon de méthode pour la suite : demander assez de contexte
+(`-A` large, ou `sed`/`cat` sans limite) avant de conclure qu'un
+correctif n'a pas pris effet.
+
+Entre-temps, un symptôme sans rapport est réapparu sur cette même
+machine : le crash GPU Metal du round 4/5
+(`iogpu.wired_limit_mb` revenu à `0`, `Insufficient Memory`), very
+probablement causé par un redémarrage ou une mise en veille de la
+machine entre deux sessions de test — ce réglage ne survit jamais à un
+reboot, déjà documenté. Résolu en relançant simplement
+`./04-scripts/setup-local-model.sh`, comme prévu depuis le round 5.
+Confirmé par `ollama run ... "Dis juste bonjour."` → `Bonjour ! 😊`.
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
