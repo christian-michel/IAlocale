@@ -819,6 +819,44 @@ de consignation obligatoire fonctionne** : premier verdict de
 machine. Reste à vérifier sur un passage complet du protocole plutôt
 qu'un test ciblé, et à confirmer `controleur-de-controle` séparément.
 
+### Round 10 — un vrai bug trouvé en section 5, un doute ouvert en section 4
+
+Premier passage complet (pas juste un test ciblé) depuis les correctifs
+du round 9. Deux constats :
+
+1. **Section 4 : toujours 0 occurrence pour `controleur-qualite`**, alors
+   que les deux réponses 3a/3b affirment un contrôle qualité réussi
+   ("score de 10/10", "validé avec succès"). Sans `--json` pour ces deux
+   appels précis, impossible de confirmer si `consigner-verdict-qualite.js`
+   a vraiment été exécuté cette fois — mais une hypothèse concrète
+   existe : `dsh-logger.js` résout son fichier de log via la variable
+   d'environnement `HARNESS_HOME` (`$HARNESS_HOME/logs/pipeline.jsonl`,
+   sinon `~/dsh-harness/logs/pipeline.jsonl` par défaut).
+   `suite-tests-reelle.sh` exporte bien `HARNESS_HOME` dans son propre
+   shell, mais si l'outil bash de `dsh` exécute les commandes dans un
+   environnement assaini (plausible pour un sandbox), cette variable ne
+   serait jamais transmise au process qui lance
+   `consigner-verdict-qualite.js` depuis l'intérieur de `dsh` — auquel cas
+   le verdict serait bien consigné, mais dans
+   `~/dsh-harness/logs/pipeline.jsonl`, jamais relu par la section 4 du
+   script (qui lit le `logs/` du dépôt). **Pas encore vérifié** : reste à
+   inspecter ce fichier sur la machine réelle pour trancher.
+
+2. **Section 5 : un vrai bug trouvé, corrigé.** `git commit` échouait
+   avec "Commande git inattendue" quand la proposition de test
+   reproposait un contenu byte-pour-byte identique à ce qui existait déjà
+   (le fichier de test avait été restauré via `git checkout --` plutôt
+   que supprimé, lors d'un round précédent) — `git add` ne stage rien
+   dans ce cas, et `git commit` échoue légitimement avec "nothing to
+   commit", traité à tort comme une erreur inattendue. **Corrigé** :
+   `auto-implementer.js` détecte maintenant ce cas via
+   `git diff --cached --quiet` avant de committer, et renvoie un nouveau
+   statut `DEJA_A_JOUR` (branche temporaire nettoyée, rien fusionné,
+   sortie en code 0) plutôt que de planter. Testé contre un dépôt git
+   jetable : premier passage fusionne normalement, second passage avec le
+   même contenu renvoie `DEJA_A_JOUR` sans erreur, un seul commit de
+   fusion dans l'historique (pas de doublon).
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée

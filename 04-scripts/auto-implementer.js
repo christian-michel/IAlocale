@@ -201,6 +201,26 @@ async function main() {
   ].join('\n');
 
   git(['add', ...fichiersTouches]);
+
+  // Cas trouvé en pratique (voir README, "Validation sur machine
+  // réelle") : si le contenu proposé est BYTE POUR BYTE identique à ce
+  // qui existe déjà (ex. une proposition de test rejouée sans avoir
+  // nettoyé le résultat du passage précédent), `git add` ne stage rien
+  // et `git commit` échoue avec "nothing to commit" — un cas légitime,
+  // pas une erreur de git inattendue. `git diff --cached --quiet` sort
+  // en 0 s'il n'y a rien de stagé, en 1 sinon (sens inverse de la
+  // convention habituelle de sortie "succès/échec").
+  const diffVide = spawnSync('git', ['diff', '--cached', '--quiet'], { cwd: RACINE });
+  if (diffVide.status === 0) {
+    git(['checkout', brancheOrigine]);
+    git(['branch', '-D', brancheAuto]);
+    logInfo(COMPOSANT, `Proposition déjà appliquée à l'identique — rien à committer, cycle terminé sans nouvelle modification`, {
+      context: { fichiers: fichiersTouches },
+    });
+    console.log(JSON.stringify({ statut: 'DEJA_A_JOUR', fichiers: fichiersTouches }, null, 2));
+    process.exit(0);
+  }
+
   git(['commit', '-m', messageCommit]);
 
   logInfo(COMPOSANT, `Modifications commitées sur '${brancheAuto}', lancement de la vérification : ${verification}`);
