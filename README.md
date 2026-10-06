@@ -1021,6 +1021,62 @@ doivent simultanément détecter un vrai problème injecté (5 échecs, code
 tourné que contre un dépôt jetable avec `dsh`/`ollama` simulés depuis cet
 environnement — jamais la vraie machine.
 
+## 🖥️ Lancement simple et accès mobile
+
+Trois scripts optionnels, ajoutés après coup pour un usage quotidien plus
+confortable — aucun n'est requis par le reste du projet.
+
+### Icône cliquable sur le Bureau
+
+```bash
+./04-scripts/creer-raccourci-lancement.sh
+```
+Génère un `.app` double-cliquable (via `osacompile`, natif macOS, aucune
+dépendance supplémentaire) qui ouvre un Terminal et lance `./start.sh`.
+Déplaçable dans le Dock, icône personnalisable depuis le Finder (Cmd+I).
+
+### Accès depuis le mobile sur le même WiFi
+
+`dsh --profile web` écoute par défaut uniquement sur `127.0.0.1` (vérifié
+en pratique : `http://127.0.0.1:3080/?token=...`). Pour le rendre
+joignable depuis un téléphone sur le même réseau :
+
+```bash
+./04-scripts/demarrer-dsh-web-reseau.sh
+```
+Lance `dsh --profile web --host 0.0.0.0 --port 3080`, avec
+`--trusted-host` déclaré pour le nom `.local` (stable, via Bonjour/mDNS)
+et l'IP actuelle (peut changer avec le DHCP) — `dsh --profile web --help`
+documente ce garde-fou de confiance sur `/api`. Depuis ton téléphone,
+utilise l'URL affichée dans `logs/dsh-web.log`, en remplaçant l'hôte par
+le nom `.local` de ta machine (`scutil --get LocalHostName` + `.local`) —
+plus fiable qu'une IP DHCP qui peut changer.
+
+### Démarrage automatique à l'ouverture de session
+
+```bash
+./04-scripts/installer-demarrage-auto.sh
+```
+Installe un `LaunchAgent` macOS qui relance
+`demarrer-dsh-web-reseau.sh` à chaque connexion — pas besoin de lancer
+quoi que ce soit à la main. `LaunchAgent` plutôt que `LaunchDaemon`
+volontairement : tourne dans la session utilisateur, pas avec les droits
+système, pas de surface de risque supplémentaire par rapport à n'importe
+quelle app lancée normalement. Instructions de désinstallation affichées
+à la fin de son exécution.
+
+⚠️ **Portée volontairement limitée au WiFi domestique** (choix explicite
+de l'utilisateur) : `--host 0.0.0.0` expose l'interface à tout le réseau
+local, jamais à Internet — aucun port n'est ouvert sur la box/routeur.
+Le token dans l'URL reste la seule protection ; ne partage jamais ce lien
+tel quel.
+
+**Pas testé en conditions réelles** (pas de macOS dans cet environnement) :
+la génération du `.app` et du `plist` a été validée (XML bien formé,
+chemins absolus corrects, contre un faux `$HOME`/`launchctl` simulés),
+mais jamais le comportement réel de `launchctl`, ni la connexion depuis
+un vrai téléphone.
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée
