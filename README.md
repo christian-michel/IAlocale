@@ -411,7 +411,12 @@ dsh --profile headless 'Explique-moi ce que fait 04-scripts/dsh-logger.js'
 #    ses skills internes, voir "Validation sur machine réelle", round 6)
 ./04-scripts/configurer-skills-dsh.sh
 
-# 6. Lancement complet
+# 6. Désactiver l'outil de recherche web natif de dsh, câblé sur l'API
+#    cloud DeepSeek (contraire au principe "aucune API cloud" de ce
+#    projet) — voir "Validation sur machine réelle", round 12
+./04-scripts/desactiver-recherche-web-cloud.sh
+
+# 7. Lancement complet
 ./start.sh
 ```
 
@@ -896,6 +901,58 @@ confirmé, `HEAD` inchangé.
 le dépôt se trouve réellement maintenant (`git branch`), revenir sur
 `claude/determined-pasteur-50jhkd` si nécessaire, et supprimer toute
 branche `auto-amelioration/*` orpheline qui aurait pu s'accumuler.
+Confirmé sans casse sur la vraie machine : une seule branche orpheline
+trouvée, nettoyage réussi.
+
+### Round 12 — un outil hors sujet câblé sur l'API cloud DeepSeek fait dérailler le modèle
+
+Branches nettoyées, protocole complet relancé. Sections 1, 2 et 5 toujours
+solides (`DEJA_A_JOUR`/`REJETEE` comme attendu). **Nouveau mode de panne
+en section 3**, jamais vu en 11 tours précédents : sur les tâches HTML5 et
+WordPress (qui ne demandent aucune recherche web), le modèle a tenté
+d'appeler un outil `web_search`, échoué, puis dérapé en texte incohérent
+— jusqu'à une syntaxe d'appel d'outil invalide en 3b
+(`<function=web_search>...`) sur une question sans rapport
+("what is the capital of France").
+
+⚠️ Le texte produit par le modèle suggérait de "mettre à jour
+`DEEPSEEK_SEARCH_BASE_URL` vers une base Messages API compatible
+Anthropic avec des crédits suffisants" — **une suggestion à ne surtout
+pas suivre telle quelle** : c'est la sortie confuse d'un modèle qui vient
+de planter sur un vrai problème, pas une recommandation de configuration
+fiable.
+
+Cause confirmée via `dsh --profile headless --dump-config | grep -i search` :
+```yaml
+- id: web
+  config: { searchProvider: deepseek-official }
+- id: web-search-deepseek
+  config: { apiKeyEnv: DEEPSEEK_API_KEY }
+- id: tool-web
+  config: { fetch: true, searchTimeoutMs: 60000 }
+```
+`tool-web` est natif du profil `headless` (jamais installé par ce
+projet) et expose au modèle un outil de recherche web câblé en dur sur
+l'API cloud DeepSeek — directement contraire au principe "aucune API
+cloud pour le fonctionnement quotidien" de ce projet. `env | grep -i
+deepseek` confirme `DEEPSEEK_API_KEY` absente (cohérent avec une
+installation 100% locale) : tout appel à cet outil échoue donc
+systématiquement, et un modèle local de taille modeste gère mal cet
+échec plutôt que de simplement l'ignorer.
+
+**Corrigé** : nouveau script `04-scripts/desactiver-recherche-web-cloud.sh`,
+qui désactive `tool-web` (`disabled: true`) sur les profils
+`headless`/`web` — retire l'outil de la liste proposée au modèle plutôt
+que d'espérer qu'il ne l'appelle jamais. Même mécanisme de fusion sûre
+que `configurer-skills-dsh.sh` (préserve le commentaire d'en-tête, refuse
+si un vrai `!!js` est détecté). Testé contre un faux `~/.dsh/profiles/` :
+ajout d'une nouvelle entrée quand `tool-web` est absent, préservation de
+la config existante plus ajout de `disabled: true` quand il est déjà
+présent, idempotent sur deux passages.
+
+**Pas encore confirmé en conditions réelles** : reste à lancer ce script
+puis à relancer `suite-tests-reelle.sh` pour vérifier que les tâches
+3a/3b ne dévient plus vers une tentative de recherche web.
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
