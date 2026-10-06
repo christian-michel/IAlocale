@@ -636,9 +636,22 @@ Testé : fusion sur un fichier avec contenu existant (entrées préservées),
 sur un fichier minimal, idempotence sur deux passages (pas de doublon de
 chemin), et refus confirmé face à un vrai `!!js` — contre de faux
 `~/.dsh/profiles/`, jamais la vraie machine depuis cet environnement.
-**Pas encore confirmé en conditions réelles** : à vérifier avec
-`dsh --profile headless "Liste les skills que tu as à disposition."`
-après avoir lancé `./04-scripts/configurer-skills-dsh.sh`.
+**Confirmé en conditions réelles** : `./04-scripts/configurer-skills-dsh.sh`
+puis `dsh --profile headless "Liste les skills..."` renvoie les 19 skills
+de `01-skills/` avec leurs vraies descriptions (`ameliorateur-systeme`,
+`decision-rapide`, `controleur-de-controle`, etc.) — plus aucun ID
+numérique interne.
+
+### Où ça en est
+
+Les deux blocages qui empêchaient toute validation réelle sont levés
+(round 5 : le serveur répond ; round 6 : il voit les skills du projet).
+Prochaine étape naturelle : relancer le protocole complet,
+`./04-scripts/suite-tests-reelle.sh`, maintenant que les deux
+prérequis qu'il vérifiait en vain jusqu'ici sont satisfaits — en
+particulier ses sections 3 (pipeline de contrôle qualité engagé ou non
+sur les tests HTML5/WordPress) et 4 (traces des composants dans les
+logs), qui n'avaient jamais pu tourner pour de vrai.
 
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
