@@ -1394,20 +1394,46 @@ Déplaçable dans le Dock, icône personnalisable depuis le Finder (Cmd+I).
 
 ### Accès depuis le mobile sur le même WiFi
 
-`dsh --profile web` écoute par défaut uniquement sur `127.0.0.1` (vérifié
-en pratique : `http://127.0.0.1:3080/?token=...`). Pour le rendre
-joignable depuis un téléphone sur le même réseau :
+`dsh --profile web` écoute par défaut uniquement sur `127.0.0.1`.
+**Testé en conditions réelles (et c'est important) : il est impossible
+de le lier directement à une adresse du réseau local avec la version de
+`dsh` utilisée ici (`0.1.7-rc.2`)** — `--host 0.0.0.0` est refusé à
+l'exécution (`"it would expose remote code execution to the network;
+use 127.0.0.1 instead"`), et toute autre adresse (y compris l'IP réelle
+de la machine) est rejetée dès la validation de config
+(`$.host expected "127.0.0.1" | "0.0.0.0"`). Ce n'est pas un réglage à
+débloquer : `dsh` l'interdit délibérément. La version précédente de
+cette section (qui documentait `--host 0.0.0.0`) ne pouvait donc pas
+fonctionner — corrigée ici après l'avoir vérifié pour de vrai plutôt que
+supposé.
 
-```bash
-./04-scripts/demarrer-dsh-web-reseau.sh
-```
-Lance `dsh --profile web --host 0.0.0.0 --port 3080`, avec
-`--trusted-host` déclaré pour le nom `.local` (stable, via Bonjour/mDNS)
-et l'IP actuelle (peut changer avec le DHCP) — `dsh --profile web --help`
-documente ce garde-fou de confiance sur `/api`. Depuis ton téléphone,
-utilise l'URL affichée dans `logs/dsh-web.log`, en remplaçant l'hôte par
-le nom `.local` de ta machine (`scutil --get LocalHostName` + `.local`) —
-plus fiable qu'une IP DHCP qui peut changer.
+**La vraie façon d'y accéder depuis un mobile, qui respecte cette
+protection au lieu de la contourner : un tunnel SSH.** Le téléphone se
+connecte en SSH au Mac Mini, et le tunnel redirige un port local (côté
+téléphone) vers `127.0.0.1:3080` tel que vu *depuis le Mac* — `dsh`
+continue de ne parler qu'en loopback, seul le tunnel chiffré/authentifié
+traverse le réseau.
+
+1. Sur le Mac Mini : Réglages Système > Général > Partage > active
+   "Connexion à distance" (Remote Login/SSH). Note le nom d'utilisateur
+   et l'adresse affichés.
+2. Lance `dsh` sur le port stable (inchangé) :
+   ```bash
+   ./04-scripts/demarrer-dsh-web-reseau.sh
+   ```
+3. Sur le téléphone, une app SSH qui gère la redirection de port locale
+   (ex. Termius, gratuite sur iOS/Android) : connexion au Mac avec une
+   règle de redirection "port local 3080 → `127.0.0.1:3080` sur
+   l'hôte distant".
+4. Une fois le tunnel actif, ouvre `http://127.0.0.1:3080/...?token=...`
+   **dans le navigateur du téléphone** (le `127.0.0.1` est alors celui du
+   téléphone, redirigé par le tunnel vers celui du Mac) — jeton récupéré
+   dans `logs/dsh-web.log` comme avant.
+
+Pas testé de bout en bout depuis un vrai téléphone à ce stade (confirmé
+seulement que `dsh` démarre sur `127.0.0.1:3080` et refuse toute autre
+adresse) — la mise en place du tunnel SSH lui-même reste à valider en
+conditions réelles.
 
 ### Démarrage automatique à l'ouverture de session
 
@@ -1422,11 +1448,12 @@ système, pas de surface de risque supplémentaire par rapport à n'importe
 quelle app lancée normalement. Instructions de désinstallation affichées
 à la fin de son exécution.
 
-⚠️ **Portée volontairement limitée au WiFi domestique** (choix explicite
-de l'utilisateur) : `--host 0.0.0.0` expose l'interface à tout le réseau
-local, jamais à Internet — aucun port n'est ouvert sur la box/routeur.
-Le token dans l'URL reste la seule protection ; ne partage jamais ce lien
-tel quel.
+`dsh` n'écoutant que sur `127.0.0.1` (voir plus haut), ce `LaunchAgent`
+ne fait qu'avoir `dsh --profile web` toujours prêt sur ce port stable —
+il n'ouvre rien sur le réseau local par lui-même. L'exposition réelle
+dépend entièrement du tunnel SSH (ou équivalent) mis en place côté
+mobile, jamais de ce script. Le jeton dans l'URL reste la seule
+protection une fois le tunnel ouvert ; ne le partage jamais tel quel.
 
 **Testé en conditions réelles, un piège trouvé** : si ce dépôt vit sous
 `~/Documents` (ou `~/Desktop`/`~/Downloads`), le `LaunchAgent` échoue en
