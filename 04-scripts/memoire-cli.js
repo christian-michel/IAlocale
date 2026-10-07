@@ -23,8 +23,19 @@
  *   node memoire-cli.js search --q "texte" [--type <type>]
  *   node memoire-cli.js delete --id <id>
  *   node memoire-cli.js clear [--type <type>] --confirm
+ *   node memoire-cli.js backup [--raison "texte"]
+ *   node memoire-cli.js list-backups
+ *   node memoire-cli.js restore --dernier | --fichier <nom> | --horodatage <ts>
+ *
+ * Backup/restore existe parce que 06-data/memoire/ est explicitement
+ * exclu de git (voir .gitignore — "état d'exécution, propre à chaque
+ * machine") : contrairement au reste du projet, un commit git ne donne
+ * ici aucun point de restauration. `clear` crée maintenant un backup
+ * automatique avant d'effacer quoi que ce soit — un effacement reste
+ * décidé explicitement (--confirm toujours requis), mais plus jamais
+ * irréversible en pratique.
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, copyFileSync } from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
@@ -33,8 +44,33 @@ import { logInfo, logError } from './dsh-logger.js';
 const HARNESS_HOME = process.env.HARNESS_HOME || path.join(os.homedir(), 'dsh-harness');
 const MEMOIRE_DIR = path.join(HARNESS_HOME, '06-data', 'memoire');
 const MEMOIRE_FILE = path.join(MEMOIRE_DIR, 'memoire.json');
+const BACKUPS_DIR = path.join(MEMOIRE_DIR, 'backups');
 
 const COMPOSANT = 'memoire-cli';
+
+/** Liste les fichiers de backup disponibles, triés du plus ancien au
+ * plus récent (ordre alphabétique = ordre chronologique, l'horodatage
+ * ISO le garantit). */
+function listerBackups() {
+  if (!existsSync(BACKUPS_DIR)) return [];
+  return readdirSync(BACKUPS_DIR).filter(f => f.endsWith('.json')).sort();
+}
+
+/** Copie le magasin courant dans backups/, horodaté. Ne fait rien (et
+ * ne jette pas d'erreur) si memoire.json n'existe pas encore — pas de
+ * backup à faire d'un fichier qui n'a jamais existé. */
+function creerBackup(raison) {
+  if (!existsSync(MEMOIRE_FILE)) return null;
+  mkdirSync(BACKUPS_DIR, { recursive: true });
+  const horodatage = new Date().toISOString().replace(/[:.]/g, '-');
+  const nomFichier = `memoire-${horodatage}.json`;
+  const cible = path.join(BACKUPS_DIR, nomFichier);
+  copyFileSync(MEMOIRE_FILE, cible);
+  logInfo(COMPOSANT, `Point de restauration créé (${nomFichier})${raison ? ` — ${raison}` : ''}`, {
+    context: { fichier: nomFichier, raison: raison || null },
+  });
+  return nomFichier;
+}
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -170,14 +206,16 @@ if (commande === 'set') {
   console.log(`✅ Entrée '${args.id}' supprimée.`);
 
 } else if (commande === 'clear') {
-  // Effacement en masse (tout, ou un type entier) : geste volontairement
-  // irréversible, donc explicite. --confirm n'est pas là pour freiner
-  // l'agent — juste pour qu'une faute de frappe sur --type ne vide pas
-  // silencieusement toute la mémoire.
+  // Effacement en masse (tout, ou un type entier) : geste explicite
+  // (--confirm toujours requis — pas là pour freiner l'agent, juste pour
+  // qu'une faute de frappe sur --type ne vide pas silencieusement toute
+  // la mémoire), mais plus jamais irréversible en pratique : un backup
+  // automatique précède toujours l'effacement, récupérable via `restore`.
   if (!args.confirm) {
     console.error("Usage : clear [--type <type>] --confirm   (le flag --confirm est obligatoire pour un effacement en masse)");
     process.exit(1);
   }
+  const nomBackup = creerBackup(`avant clear --type ${args.type || '(toutes)'}`);
   const magasin = chargerMagasin();
   const avant = Object.keys(magasin.entries).length;
   if (args.type) {
@@ -192,10 +230,45 @@ if (commande === 'set') {
   logInfo(COMPOSANT, `Effacement en masse (${avant - apres} entrée(s) supprimée(s))`, {
     context: { type: args.type || '(toutes)' },
   });
-  console.log(`✅ ${avant - apres} entrée(s) supprimée(s).`);
+  console.log(`✅ ${avant - apres} entrée(s) supprimée(s).${nomBackup ? ` Backup avant effacement : ${nomBackup}` : ''}`);
+
+} else if (commande === 'backup') {
+  const raison = typeof args.raison === 'string' ? args.raison : null;
+  const nomBackup = creerBackup(raison);
+  if (!nomBackup) {
+    console.log(JSON.stringify({ statut: 'RIEN_A_SAUVEGARDER', message: `${MEMOIRE_FILE} n'existe pas encore.` }, null, 2));
+  } else {
+    console.log(JSON.stringify({ statut: 'SAUVEGARDE', fichier: nomBackup }, null, 2));
+  }
+
+} else if (commande === 'list-backups') {
+  const backups = listerBackups();
+  console.log(JSON.stringify({ count: backups.length, backups }, null, 2));
+
+} else if (commande === 'restore') {
+  const backups = listerBackups();
+  let cible;
+  if (args.dernier) {
+    cible = backups[backups.length - 1];
+  } else if (typeof args.fichier === 'string') {
+    cible = args.fichier;
+  } else if (typeof args.horodatage === 'string') {
+    cible = `memoire-${args.horodatage}.json`;
+  }
+  if (!cible || !backups.includes(cible)) {
+    console.error(`❌ Point de restauration introuvable. Disponibles : ${backups.join(', ') || '(aucun)'}`);
+    console.error('Usage : restore --dernier | --fichier <nom> | --horodatage <ts>');
+    process.exit(1);
+  }
+  // Une restauration ne doit jamais, elle-même, devenir irréversible :
+  // on sauvegarde toujours l'état courant avant de le remplacer.
+  const nomBackupAvant = creerBackup(`avant restauration de ${cible}`);
+  copyFileSync(path.join(BACKUPS_DIR, cible), MEMOIRE_FILE);
+  logInfo(COMPOSANT, `Mémoire restaurée depuis ${cible}`, { context: { fichier: cible, backup_precedent: nomBackupAvant } });
+  console.log(JSON.stringify({ statut: 'RESTAUREE', depuis: cible, etat_precedent_sauvegarde_sous: nomBackupAvant }, null, 2));
 
 } else {
   console.error(`Commande inconnue : ${commande || '(aucune)'}`);
-  console.error('Usage : set | get | list | search | delete | clear');
+  console.error('Usage : set | get | list | search | delete | clear | backup | list-backups | restore');
   process.exit(1);
 }

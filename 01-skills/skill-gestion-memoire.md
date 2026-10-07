@@ -35,8 +35,20 @@ node 04-scripts/memoire-cli.js search --q "mot-clé"
 
 # Supprimer
 node 04-scripts/memoire-cli.js delete --id <id>
-node 04-scripts/memoire-cli.js clear [--type preference] --confirm   # irréversible
+node 04-scripts/memoire-cli.js clear [--type preference] --confirm   # backup auto avant, récupérable
+
+# Points de restauration (06-data/memoire/ est hors git, voir .gitignore —
+# c'est le seul point de cette mémoire qui n'a pas d'historique autrement)
+node 04-scripts/memoire-cli.js backup [--raison "avant un test risqué"]
+node 04-scripts/memoire-cli.js list-backups
+node 04-scripts/memoire-cli.js restore --dernier | --fichier <nom> | --horodatage <ts>
 ```
+
+**Avant toute opération risquée sur la mémoire** (une correction en
+masse, un test dont tu n'es pas sûr du résultat) : crée un backup
+explicite (`backup --raison "..."`) même si `clear` en crée déjà un
+automatiquement — `set`/`delete` individuels n'en créent pas, puisqu'ils
+sont déjà réversibles un par un via `get`/`set --id`.
 
 Chaque commande imprime le résultat en JSON sur la **dernière ligne** de
 sa sortie standard (les lignes qui précèdent, préfixées d'une icône,

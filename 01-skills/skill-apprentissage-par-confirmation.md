@@ -31,9 +31,13 @@ nouveau mécanisme de stockage.
    ```bash
    node 04-scripts/memoire-cli.js set --type reponse-validee \
      --contenu "Q: <question> | R: <réponse confirmée>" \
-     --tags <domaine> --confiance 10 \
+     --tags <domaine>,<situation>,<contrainte-si-pertinente> --confiance 10 \
      --source "confirmée par l'utilisateur le <date>"
    ```
+   Des tags riches (pas juste le domaine) sont ce qui permet de
+   retrouver cette réponse dans un contexte vraiment similaire plus
+   tard, pas seulement sur un mot-clé générique — même principe que
+   `skill-comparateur-scenarios.md`.
    Si l'utilisateur corrige plutôt que de confirmer, enregistre la
    version **corrigée** (pas l'originale) — c'est elle qui doit servir la
    prochaine fois, pas ta première tentative.
