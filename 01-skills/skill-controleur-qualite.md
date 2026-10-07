@@ -15,13 +15,18 @@ La réponse répond-elle à **tous** les aspects de la demande ?
 ### 2. Précision
 Les faits sont-ils sourcés ? Y a-t-il des contradictions ?
 
-### 3. Test Pratique (si le résultat contient du code)
+### 3. Preuve fraîche obligatoire — jamais de verdict sur une simple affirmation
+Si la tâche affirme avoir produit un artefact (fichier créé ou modifié, service relancé, valeur changée quelque part), **vérifie-le toi-même avant de juger** — ne te fie jamais au texte qui décrit l'action comme preuve que l'action a eu lieu. Concrètement : si la réponse dit "le fichier X a été créé", exécute une vérification directe sur ce fichier précis (`cat`/`ls`/équivalent via l'outil bash) avant de continuer. Si l'artefact annoncé n'existe pas, ou ne correspond pas à ce qui est décrit, le statut ne peut pas être `VALIDE` — au mieux `A_VERIFIER`, le plus souvent `INVALIDE`.
+
+Cette étape existe parce qu'elle a été prise en défaut en conditions réelles (voir `README.md`, "Validation sur machine réelle", rounds 14-17) : un modèle peut affirmer avec assurance qu'un fichier a été créé et validé, alors qu'aucun fichier n'existait réellement sur le disque. Une affirmation de succès, aussi détaillée et confiante soit-elle, n'est jamais une preuve — seule une vérification indépendante en est une.
+
+### 4. Test Pratique (si le résultat contient du code)
 Utilise le skill `testeur-docker` pour exécuter le code dans un environnement isolé plutôt que de juger "à l'œil".
 
-### 4. Historique d'erreurs
+### 5. Historique d'erreurs
 Consulte `node 04-scripts/errors-cli.js summary --hours 24` avant de valider : si une erreur similaire (même composant, même type d'exception) s'est déjà produite récemment, signale-le explicitement au lieu de valider silencieusement.
 
-### 5. Consignation obligatoire du verdict — NE SAUTE JAMAIS CETTE ÉTAPE
+### 6. Consignation obligatoire du verdict — NE SAUTE JAMAIS CETTE ÉTAPE
 
 Une fois ton verdict déterminé (statut, score, commentaire), tu DOIS
 exécuter la commande suivante via l'outil bash, avant toute chose,

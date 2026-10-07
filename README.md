@@ -1168,6 +1168,249 @@ devenir) avant de relancer `suite-tests-reelle.sh`.
 `AUTORISER_ECRITURE_HEADLESS=1`, puis D.14/C.7/5a/5b devraient se
 résoudre en cascade plutôt qu'individuellement.
 
+### Round 15 — cause racine confirmée : un contexte tronqué dégrade l'appel d'outils, pas une contamination entre sessions
+
+Les trois pistes ouvertes au round 14 ont été tranchées avec une preuve
+directe, pas juste un raisonnement.
+
+**La preuve, dans une trace `--json` isolée.** La même question
+("Liste les skills que tu as à disposition.") posée deux fois, à deux
+contextes Ollama différents :
+
+- **Contexte 4096** (réglage jamais réappliqué depuis un redémarrage,
+  A.1/A.2 en échec) : le modèle appelle l'outil `skill` avec
+  `{"skill_name":"controle-qualite"}` — mauvaise clé. L'erreur renvoyée
+  dit explicitement `missing required property "name"`. Il recommence
+  **5 fois**, avec 5 noms de skill différents, en gardant chaque fois la
+  même clé fausse `skill_name`, sans jamais se corriger malgré un
+  message d'erreur qui nomme littéralement le bon champ. Après le 5e
+  échec, il abandonne et part sur un texte inventé sans rapport
+  (`subagent_fork`, "Analyze LLM safety mechanisms"). Round 14 avait vu
+  deux hallucinations différentes sur cette même question
+  (`fake_data_generator.py`, puis "Research the impact of AI on
+  society") — **pas une contamination d'historique entre appels**
+  (`~/.dsh/profiles/headless/` ne contient aucun fichier de session,
+  vérifié), mais la même dégradation qui produit chaque fois un
+  résultat différent selon où le raisonnement du modèle part en vrille.
+- **Contexte 32768** (après un simple
+  `./04-scripts/setup-local-model.sh`) : réponse parfaite à la première
+  tentative, les 24 skills du dépôt listés avec leur description exacte
+  — **sans même avoir besoin d'appeler l'outil `skill`**, directement
+  depuis ce que le modèle garde présent dans son contexte. Le paramètre
+  `name` (confirmé correct par une trace du round 7/9) n'est d'ailleurs
+  plus jamais mal orthographié une fois le contexte rétabli.
+
+**Conclusion** : un contexte tronqué à 4096 tokens (au lieu des 32768
+configurés) ne fait pas juste "répondre plus court" — il semble faire
+perdre au modèle le schéma exact des outils disponibles (~14 700 tokens
+de catalogue, voir section "Optimisation Mac Mini M4"), ce qui dégrade
+sa capacité à les appeler correctement et le fait déraper vers des
+réponses sans rapport une fois qu'il échoue en boucle. C'est la cause
+racine commune des échecs A.3/3a/3b/D.14/C.7 du round 14 — pas 5
+problèmes indépendants.
+
+**Confirmé par un passage complet de `suite-tests-reelle.sh` après le
+correctif** : 6 échecs → 1 seul. A.1/A.2/A.3/A.4 passent. **C.7 passe
+pour la première fois via le script automatique complet** (pas
+seulement un test ciblé comme au round 9) : un vrai verdict
+`controleur-qualite` consigné sur une tâche réelle. 3b (thème WordPress)
+est un succès vérifié de bout en bout — les 3 fichiers attendus
+existent bien sur disque, `style.css` contient le bon en-tête `Theme
+Name: test`. 5a/5b se comportent exactement comme conçus : 5a fusionne
+une proposition valide, 5b rejette une proposition invalide
+(`modifier-script` non autorisé) avant toute écriture.
+
+**Ce qui reste, et qui n'est PAS le glitch bénin du round 7** : 3a (page
+HTML5) échoue encore à D.14, mais cette fois `test-html5.html`
+**n'existe pas du tout** sur disque — vérifié directement. Contrairement
+au round 7 (où l'artefact de fin de tour survenait APRÈS une tâche déjà
+réussie, donc cosmétique), ici le modèle annonce l'intention ("Je vais
+créer...") puis tente directement d'appeler `controle-qualite` — avec
+la bonne clé `name` cette fois, mais en syntaxe brute non exécutée — **sans
+jamais créer le fichier**.
+
+**Correction après un 3e passage (même session, contexte toujours à
+32768, confirmé) : le correctif du round 15 n'explique pas tout.** Avec
+un contexte sain ET l'écriture autorisée sur deux passages consécutifs :
+- **3a (page HTML5) : 0 succès sur 3 tentatives réelles**, à chaque fois
+  avec un outil fabriqué différent, qui n'existe nulle part dans ce
+  dépôt (vérifié par recherche dans `01-skills/`/`03-workflows/`) :
+  `todo_write` (round 14, contexte dégradé), rien d'identifiable (round
+  15, contexte sain), puis `update_goal` avec un id de toute évidence
+  factice (`g-1234567890`) sur ce 3e passage, contexte toujours sain.
+- **3b (thème WordPress) : 1 succès sur 2 tentatives** une fois le
+  contexte corrigé — réussi au round 15, mais a échoué au 3e passage
+  (le modèle décrit son intention puis émet l'appel `bash` du `mkdir`
+  en texte brut au lieu de l'exécuter — aucun fichier créé, confirmé).
+
+**Conclusion révisée** : le contexte tronqué était une cause racine
+réelle et confirmée pour A.1/A.2/A.3 (fiable sur les 3 passages depuis
+le correctif), mais **pas** la seule cause de D.14 — cette syntaxe
+d'appel d'outil malformée en fin de tour reste un problème ouvert,
+reproductible même à contexte sain, pas encore expliqué. 3a échoue de
+façon stable (3/3) quelle que soit la cause déjà écartée (ni contexte,
+ni accès écriture) — un indice plus solide qu'un aléa isolé.
+
+### Round 16 — répétition minimale et isolée du glitch : hors contexte, hors mauvaise clé
+
+La consigne 3a (exactement celle de `suite-tests-reelle.sh`, mais
+sauvegardée hors du dépôt dans `/tmp` pour isoler complètement le test)
+relancée seule, sans rien d'autre autour :
+```
+dsh --profile headless --json "Cree une page HTML5 complete et valide avec un titre, un paragraphe de description et un bouton. Sauvegarde-la dans /tmp/isole-3a/test-html5.html. Avant de considerer la tache terminee, fais verifier le resultat par le controle qualite."
+```
+
+Toute la réponse (un seul événement `text`, 73 tokens de sortie) :
+```
+<function=skill><parameter=name>personnalite-et-sagesse</parameter></function></tool_call>
+<function=skill><parameter=name>consulter-sagesse-interne</parameter></function></tool_call>
+<function=skill><parameter=name>analyse-objectifs</parameter></function></tool_call>
+```
+
+Trois tentatives, chacune syntaxiquement correcte cette fois (bon
+paramètre `name`, contrairement à `skill_name` au round 15) —
+**et pourtant aucune des trois n'apparaît comme un vrai `tool_call`
+dans la trace JSON** : pas un seul `{"type":"tool_call",...}`, là où
+les traces précédentes montraient au moins des tentatives réellement
+dispatchées (même avec la mauvaise clé). Le tour se termine
+(`turn_end`, `reason: completed`) sans jamais toucher à la vraie tâche
+— pas de fichier créé, rien.
+
+**Ça écarte les deux hypothèses précédentes comme explication
+complète** : contexte sain (32768, confirmé par le round précédent),
+syntaxe correcte, et le glitch persiste quand même, sous sa forme la
+plus épurée observée jusqu'ici. **Nouvelle hypothèse, pas encore
+confirmée** : `dsh` ne reconnaîtrait fiablement qu'un seul appel
+d'outil par tour — quand le modèle en enchaîne plusieurs d'affilée dans
+une même réponse avant de rendre la main (ici 3 d'un coup), le parseur
+de template ne les détecte plus du tout, et tout retombe en texte brut
+plutôt qu'en appels exécutés. Les trois skills tentés
+(`personnalite-et-sagesse`, `consulter-sagesse-interne`,
+`analyse-objectifs`) ne sont pas absurdes comme réaction à la consigne
+— `analyse-objectifs` est même une vraie bonne première étape d'après
+sa propre description — donc l'intention du modèle est plausible ;
+c'est l'exécution côté `dsh` qui casse.
+
+**Reste à faire pour confirmer ou infirmer cette hypothèse** : relancer
+exactement la même consigne isolée contre un modèle d'une autre famille
+déjà présent dans `ollama list` (ex. `mistral-small3.2`, pas de la
+famille Qwen3) via `./04-scripts/setup-local-model.sh
+mistral-small3.2:latest` puis le même appel `--json`. Si le glitch
+disparaît avec un autre modèle, c'est spécifique à la façon dont
+`qwen3-coder` formate ses appels d'outils multiples. S'il persiste,
+c'est bien `dsh` lui-même qui ne gère pas plusieurs appels d'outils en
+une seule réponse, quel que soit le modèle — pas encore testé, à faire
+avant de conclure.
+
+### Round 17 — même consigne contre `mistral-small3.2` : le glitch de template disparaît, mais une autre limite apparaît
+
+Une incidente d'abord, sans rapport avec le fond : le premier essai
+contre `mistral-small3.2` a échoué avec `UNKNOWN_MODEL` (le profil
+`headless` réclamait encore `qwen3-coder`). Pas un bug de nos scripts —
+`~/.dsh/profiles/headless/cordis.patch.yml` se régénère depuis la
+config globale à chaque lancement de `dsh`, et affichait déjà le bon
+modèle (`mistral-small3.2:latest`, contexte 32768) dès l'appel suivant.
+Juste un essai relancé une seconde fois trop tôt après le changement de
+modèle.
+
+**La vraie comparaison, une fois corrigée.** Avec `mistral-small3.2`, le
+glitch de template du round 16 (texte brut jamais reconnu comme
+`tool_call`) **n'apparaît pas** : tous les appels sont correctement
+structurés et dispatchés par `dsh` — confirme que ce glitch précis est
+propre à la façon dont `qwen3-coder` formate ses appels, pas une
+limite générale de `dsh`.
+
+Mais la tâche échoue quand même, pour une raison différente :
+1. `mistral-small3.2` appelle d'abord `create_goal` (un vrai outil
+   `dsh`, pas une invention — ça confirme rétrospectivement que les
+   `update_goal`/`todo_write` vus aux rounds 14/15 avec `qwen3-coder`
+   n'étaient pas de pures hallucinations, mais des tentatives
+   déformées du **même** mécanisme réel de suivi d'objectif). Réussit.
+2. Il rédige le HTML5 correctement (code valide, titre, paragraphe,
+   bouton).
+3. Il appelle l'outil `write` avec `{"path": "...", "content": "..."}`
+   — mais le vrai paramètre attendu est `file_path`, pas `path`.
+   L'erreur le dit explicitement : `missing required property
+   "file_path"`.
+4. **Il n'essaie jamais une seconde fois avec la bonne clé** — il
+   décrit son plan en prose sur deux tours de plus ("je vais créer le
+   dossier, puis sauvegarder le fichier...") sans jamais relancer
+   l'appel, et le tour se termine sans fichier créé.
+
+**Constat qui dépasse le seul `qwen3-coder`** : les deux modèles testés
+devinent une mauvaise clé de paramètre pour un outil (`skill_name` vs
+`name` pour l'un, `path` vs `file_path` pour l'autre), et **aucun des
+deux ne se corrige après avoir reçu un message d'erreur qui nomme
+pourtant explicitement le bon champ**. Changer de modèle ne fait pas
+disparaître l'échec de la tâche 3a — il change seulement la façon dont
+elle échoue (glitch de template invisible pour `qwen3-coder`, erreur
+réelle mais jamais corrigée pour `mistral-small3.2`). Pas une piste à
+creuser davantage par simple changement de modèle : les deux modèles
+locaux disponibles ici échouent sur cette tâche précise, pour des
+raisons différentes mais avec le même symptôme final (pas de fichier).
+
+**Remis `qwen3-coder` en modèle actif après ce test** (celui recommandé
+par défaut, voir section "Modèles interchangeables") :
+```bash
+./04-scripts/setup-local-model.sh qwen3-coder:30b-a3b-q4_K_M
+```
+
+**Question légitime à ce stade : qu'est-ce qui a changé entre les
+rounds 10-13 (3a semblait réussir) et maintenant (3a échoue
+systématiquement) ?** Vérifié : `dsh --version` est toujours
+`0.1.7-rc.2`, identique aux tout premiers rounds — pas de mise à jour
+de `dsh` en cause. `ollama --version` (`0.40.0` actuellement) n'avait
+jamais été noté dans les rounds précédents, donc une mise à jour
+silencieuse d'Ollama entre-temps ne peut pas être exclue formellement,
+faute de point de comparaison.
+
+Mais une explication plus simple, et directement vérifiée cette
+session, suffit à elle seule : **au round 10, "3a a réussi" reposait
+uniquement sur le texte final du modèle** ("score de 10/10", "validé
+avec succès") — personne n'avait vérifié que `test-html5.html`
+existait réellement sur disque, seul le comptage des logs (section 4)
+était en doute à l'époque. Cette session a prouvé, trois fois, avec
+deux modèles différents (round 15 passage 2, round 16, round 17), que
+cette confiance dans le texte final n'est pas fondée : le modèle peut
+affirmer un succès alors que rien n'a été écrit. Le contrôle D.14
+(round 13) et les vérifications manuelles de fichiers (cette session)
+sont des ajouts récents au protocole de test, pas le bug lui-même —
+3a n'a probablement jamais été fiable, simplement personne ne l'avait
+encore vérifié d'assez près pour s'en apercevoir.
+
+### Round 18 — 3a réussit enfin pour de vrai ; `dsh` mis à jour ; contenu personnel ajouté
+
+**Premier succès complet et vérifié de 3a.** Un nouveau passage de
+`suite-tests-reelle.sh` (toujours `qwen3-coder`, contexte sain) montre
+3a réussir intégralement : fichier `test-html5.html` réellement créé,
+contrôle qualité exécuté, **et C.7 consigne 2 nouveaux verdicts** (contre
+1 lors du précédent succès partiel) — cette fois c'est 3b qui échoue
+avec le glitch `update_goal` déjà vu au round 15. **Ça corrige la
+lecture trop catégorique du round 17** ("3a : 0 succès sur 3
+tentatives") : sur l'ensemble des passages réels de cette session, les
+deux tâches ont chacune déjà réussi et déjà échoué au moins une fois —
+le bon résumé est "intermittent sur les deux", pas "3a cassé, 3b
+fiable" ni l'inverse. Pas encore assez de passages pour chiffrer un
+vrai taux de réussite.
+
+**`dsh` mis à jour, le terrain change à partir d'ici.** Tous les rounds
+1 à 17 ont tourné contre `0.1.7-rc.2`. À l'occasion de l'investigation
+sur la fluidité de l'interface web (texte/focus qui se comportait mal),
+`dsh` a été mis à jour vers `0.2.0-rc.2` puis `0.2.1-alpha.1` — cette
+dernière touche justement l'éditeur de prompt (texte multiligne,
+gestion clavier). **Tout round documenté à partir d'ici reflète cette
+nouvelle version**, pas celle des rounds précédents — à garder en tête
+si un comportement déjà caractérisé (le glitch de template, par
+exemple) semble changer : la version de `dsh` a changé en même temps.
+Pas encore confirmé si la fluidité de l'interface web s'est améliorée.
+
+**`06-data/personnalite/` et `06-data/sagesse/citations-sages/` ne sont
+plus vides.** Contenu personnel ajouté directement par l'utilisateur
+(cahiers, méthode, clés relationnelles, citations) — les deux
+emplacements que `skill-personnalite-et-sagesse.md` et
+`skill-persona-relations-humaines.md` attendaient vides jusqu'ici (voir
+`PISTES-EVOLUTION.md`, point 4). Contenu personnel, non détaillé ici.
+
 ## 🖥️ Lancement simple et accès mobile
 
 Trois scripts optionnels, ajoutés après coup pour un usage quotidien plus
@@ -1184,20 +1427,46 @@ Déplaçable dans le Dock, icône personnalisable depuis le Finder (Cmd+I).
 
 ### Accès depuis le mobile sur le même WiFi
 
-`dsh --profile web` écoute par défaut uniquement sur `127.0.0.1` (vérifié
-en pratique : `http://127.0.0.1:3080/?token=...`). Pour le rendre
-joignable depuis un téléphone sur le même réseau :
+`dsh --profile web` écoute par défaut uniquement sur `127.0.0.1`.
+**Testé en conditions réelles (et c'est important) : il est impossible
+de le lier directement à une adresse du réseau local avec la version de
+`dsh` utilisée ici (`0.1.7-rc.2`)** — `--host 0.0.0.0` est refusé à
+l'exécution (`"it would expose remote code execution to the network;
+use 127.0.0.1 instead"`), et toute autre adresse (y compris l'IP réelle
+de la machine) est rejetée dès la validation de config
+(`$.host expected "127.0.0.1" | "0.0.0.0"`). Ce n'est pas un réglage à
+débloquer : `dsh` l'interdit délibérément. La version précédente de
+cette section (qui documentait `--host 0.0.0.0`) ne pouvait donc pas
+fonctionner — corrigée ici après l'avoir vérifié pour de vrai plutôt que
+supposé.
 
-```bash
-./04-scripts/demarrer-dsh-web-reseau.sh
-```
-Lance `dsh --profile web --host 0.0.0.0 --port 3080`, avec
-`--trusted-host` déclaré pour le nom `.local` (stable, via Bonjour/mDNS)
-et l'IP actuelle (peut changer avec le DHCP) — `dsh --profile web --help`
-documente ce garde-fou de confiance sur `/api`. Depuis ton téléphone,
-utilise l'URL affichée dans `logs/dsh-web.log`, en remplaçant l'hôte par
-le nom `.local` de ta machine (`scutil --get LocalHostName` + `.local`) —
-plus fiable qu'une IP DHCP qui peut changer.
+**La vraie façon d'y accéder depuis un mobile, qui respecte cette
+protection au lieu de la contourner : un tunnel SSH.** Le téléphone se
+connecte en SSH au Mac Mini, et le tunnel redirige un port local (côté
+téléphone) vers `127.0.0.1:3080` tel que vu *depuis le Mac* — `dsh`
+continue de ne parler qu'en loopback, seul le tunnel chiffré/authentifié
+traverse le réseau.
+
+1. Sur le Mac Mini : Réglages Système > Général > Partage > active
+   "Connexion à distance" (Remote Login/SSH). Note le nom d'utilisateur
+   et l'adresse affichés.
+2. Lance `dsh` sur le port stable (inchangé) :
+   ```bash
+   ./04-scripts/demarrer-dsh-web-reseau.sh
+   ```
+3. Sur le téléphone, une app SSH qui gère la redirection de port locale
+   (ex. Termius, gratuite sur iOS/Android) : connexion au Mac avec une
+   règle de redirection "port local 3080 → `127.0.0.1:3080` sur
+   l'hôte distant".
+4. Une fois le tunnel actif, ouvre `http://127.0.0.1:3080/...?token=...`
+   **dans le navigateur du téléphone** (le `127.0.0.1` est alors celui du
+   téléphone, redirigé par le tunnel vers celui du Mac) — jeton récupéré
+   dans `logs/dsh-web.log` comme avant.
+
+Pas testé de bout en bout depuis un vrai téléphone à ce stade (confirmé
+seulement que `dsh` démarre sur `127.0.0.1:3080` et refuse toute autre
+adresse) — la mise en place du tunnel SSH lui-même reste à valider en
+conditions réelles.
 
 ### Démarrage automatique à l'ouverture de session
 
@@ -1212,11 +1481,12 @@ système, pas de surface de risque supplémentaire par rapport à n'importe
 quelle app lancée normalement. Instructions de désinstallation affichées
 à la fin de son exécution.
 
-⚠️ **Portée volontairement limitée au WiFi domestique** (choix explicite
-de l'utilisateur) : `--host 0.0.0.0` expose l'interface à tout le réseau
-local, jamais à Internet — aucun port n'est ouvert sur la box/routeur.
-Le token dans l'URL reste la seule protection ; ne partage jamais ce lien
-tel quel.
+`dsh` n'écoutant que sur `127.0.0.1` (voir plus haut), ce `LaunchAgent`
+ne fait qu'avoir `dsh --profile web` toujours prêt sur ce port stable —
+il n'ouvre rien sur le réseau local par lui-même. L'exposition réelle
+dépend entièrement du tunnel SSH (ou équivalent) mis en place côté
+mobile, jamais de ce script. Le jeton dans l'URL reste la seule
+protection une fois le tunnel ouvert ; ne le partage jamais tel quel.
 
 **Testé en conditions réelles, un piège trouvé** : si ce dépôt vit sous
 `~/Documents` (ou `~/Desktop`/`~/Downloads`), le `LaunchAgent` échoue en
@@ -1257,7 +1527,7 @@ dsh-harness/
 ├── PISTES-EVOLUTION.md       # idées discutées mais pas encore commencées — état réel + recommandation pour chacune
 ├── start.sh                  # point d'entrée interactif (dsh --profile web + watcher)
 │
-├── 01-skills/                 # 24 skills — voir leur description en tête de fichier pour le déclenchement
+├── 01-skills/                 # 25 skills — voir leur description en tête de fichier pour le déclenchement
 │   ├── skill-controleur-qualite.md / skill-controleur-de-controle.md   # double contrôle d'une réponse
 │   ├── skill-decision-rapide.md / skill-ameliorateur.md / skill-ameliorateur-systeme.md
 │   ├── skill-auto-implementation.md                                    # documente auto-implementer.js
@@ -1268,6 +1538,7 @@ dsh-harness/
 │   ├── skill-raisonnement-scientifique.md
 │   ├── skill-apprentissage-par-confirmation.md                         # apprend des succès confirmés par l'utilisateur
 │   ├── skill-comparateur-scenarios.md                                  # A/B sur une tâche récurrente, garde le gagnant
+│   ├── skill-clarifier-la-demande.md                                   # questions par vagues AVANT de commencer, sur demande explicite
 │   ├── skill-testeur-docker.md / skill-evaluateur.md / skill-analyse-objectifs.md
 │   ├── skill-boucles-agentiques.md / skill-detection-erreurs-silencieuses.md
 │   └── skill-extracteur-tests.md / skill-synthese-finale.md / skill-verifier-et-croiser.md
