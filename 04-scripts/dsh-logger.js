@@ -21,6 +21,9 @@
 
 import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import path from 'path';
+// HARNESS_HOME (racine de l'installation) n'est déclaré qu'une fois dans
+// config.js — ne pas la redéfinir ici, voir ce fichier pour changer le
+// mécanisme de résolution (variable d'env HARNESS_HOME, ou un défaut).
 import { HARNESS_HOME } from './config.js';
 
 const LOG_DIR = path.join(HARNESS_HOME, 'logs');

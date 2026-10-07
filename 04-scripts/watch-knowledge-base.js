@@ -3,6 +3,7 @@ import { readFile, writeFile, readdir, stat, mkdir } from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { logInfo, logSilentError } from './dsh-logger.js';
+// HARNESS_HOME : voir config.js, seule déclaration du projet.
 import { HARNESS_HOME } from './config.js';
 
 const KNOWLEDGE_BASE = path.join(HARNESS_HOME, '06-data');

@@ -275,8 +275,11 @@ async function main() {
   const avecJustification = Boolean(args['avec-justification']);
   const seuilConfiance = args['seuil-confiance'] !== undefined ? Number(args['seuil-confiance']) : null;
 
+  // echelleMin/echelleMax ne sont pas transmis à decisionViaLaya : ce
+  // moteur refuse déjà --type note (seul type qui s'en servirait) avant
+  // même de regarder les arguments — voir moteur-laya.js.
   const { decisionBrute, dureeMs, modele, detailTiming } = moteur === 'laya'
-    ? await decisionViaLaya({ args, composant, type, choix, echelleMin, echelleMax })
+    ? await decisionViaLaya({ args, composant, type, choix })
     : await decisionViaOllama({ args, composant, type, choix, echelleMin, echelleMax, avecJustification });
 
   const raisonInvalide = validerDecision(decisionBrute, { type, choix, echelleMin, echelleMax });

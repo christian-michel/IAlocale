@@ -39,6 +39,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, copyFi
 import path from 'path';
 import crypto from 'crypto';
 import { logInfo, logError } from './dsh-logger.js';
+// HARNESS_HOME : voir config.js, seule déclaration du projet.
 import { HARNESS_HOME } from './config.js';
 
 const MEMOIRE_DIR = path.join(HARNESS_HOME, '06-data', 'memoire');

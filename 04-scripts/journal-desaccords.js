@@ -35,6 +35,7 @@
 import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { logInfo, logError } from './dsh-logger.js';
+// HARNESS_HOME : voir config.js, seule déclaration du projet.
 import { HARNESS_HOME } from './config.js';
 
 const COMPOSANT_DEFAUT = 'journal-desaccords';
