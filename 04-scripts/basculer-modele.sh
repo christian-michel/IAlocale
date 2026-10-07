@@ -17,6 +17,7 @@ PROFIL="${1:-}"
 CONFIG="05-configs/modeles.yaml"
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ python3 requis pour lire $CONFIG."; exit 1; }
+python3 -c "import yaml" >/dev/null 2>&1 || { echo "❌ Module Python 'yaml' manquant. Installe-le avec : pip3 install pyyaml --break-system-packages"; exit 1; }
 [ -f "$CONFIG" ] || { echo "❌ Fichier introuvable : $CONFIG"; exit 1; }
 
 if [ -z "$PROFIL" ]; then

@@ -389,6 +389,30 @@ le profil et délègue à `setup-local-model.sh` :
 
 ## 🚀 Installation
 
+### En une seule commande (machine neuve)
+
+```bash
+git clone <url-du-depot> ~/dsh-harness
+cd ~/dsh-harness
+./04-scripts/bootstrap-complet.sh
+```
+
+Vérifie et installe, dans l'ordre, tout ce dont ce projet a eu besoin au
+fil de son développement — Homebrew (détecté, pas installé
+automatiquement : demande une confirmation interactive de ta part),
+Node/npm, pnpm, git, python3 + le module PyYAML, Docker (optionnel),
+Ollama — puis enchaîne `install-plugins.sh`,
+`setup-local-model.sh`, `configurer-skills-dsh.sh` et
+`desactiver-recherche-web-cloud.sh`. But explicite : effacer le Mac Mini
+et tout retrouver avec une seule commande. Chaque script reste aussi
+utilisable séparément (détail ci-dessous) — `bootstrap-complet.sh` ne
+fait que les enchaîner avec les vérifications de prérequis qui leur
+manquaient en amont.
+
+Teste ensuite avec `./04-scripts/suite-tests-reelle.sh`.
+
+### Étape par étape (ou pour comprendre ce que fait le script ci-dessus)
+
 ```bash
 unzip dsh-harness.zip -d ~/dsh-harness
 cd ~/dsh-harness

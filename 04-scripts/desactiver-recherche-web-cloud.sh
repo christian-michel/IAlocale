@@ -19,6 +19,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ python3 requis pour fusionner le YAML."; exit 1; }
+python3 -c "import yaml" >/dev/null 2>&1 || { echo "❌ Module Python 'yaml' manquant. Installe-le avec : pip3 install pyyaml --break-system-packages"; exit 1; }
 
 for PROFIL in headless web; do
     PATCH_FILE="$HOME/.dsh/profiles/$PROFIL/cordis.patch.yml"
