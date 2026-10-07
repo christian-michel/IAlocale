@@ -1168,6 +1168,72 @@ devenir) avant de relancer `suite-tests-reelle.sh`.
 `AUTORISER_ECRITURE_HEADLESS=1`, puis D.14/C.7/5a/5b devraient se
 résoudre en cascade plutôt qu'individuellement.
 
+### Round 15 — cause racine confirmée : un contexte tronqué dégrade l'appel d'outils, pas une contamination entre sessions
+
+Les trois pistes ouvertes au round 14 ont été tranchées avec une preuve
+directe, pas juste un raisonnement.
+
+**La preuve, dans une trace `--json` isolée.** La même question
+("Liste les skills que tu as à disposition.") posée deux fois, à deux
+contextes Ollama différents :
+
+- **Contexte 4096** (réglage jamais réappliqué depuis un redémarrage,
+  A.1/A.2 en échec) : le modèle appelle l'outil `skill` avec
+  `{"skill_name":"controle-qualite"}` — mauvaise clé. L'erreur renvoyée
+  dit explicitement `missing required property "name"`. Il recommence
+  **5 fois**, avec 5 noms de skill différents, en gardant chaque fois la
+  même clé fausse `skill_name`, sans jamais se corriger malgré un
+  message d'erreur qui nomme littéralement le bon champ. Après le 5e
+  échec, il abandonne et part sur un texte inventé sans rapport
+  (`subagent_fork`, "Analyze LLM safety mechanisms"). Round 14 avait vu
+  deux hallucinations différentes sur cette même question
+  (`fake_data_generator.py`, puis "Research the impact of AI on
+  society") — **pas une contamination d'historique entre appels**
+  (`~/.dsh/profiles/headless/` ne contient aucun fichier de session,
+  vérifié), mais la même dégradation qui produit chaque fois un
+  résultat différent selon où le raisonnement du modèle part en vrille.
+- **Contexte 32768** (après un simple
+  `./04-scripts/setup-local-model.sh`) : réponse parfaite à la première
+  tentative, les 24 skills du dépôt listés avec leur description exacte
+  — **sans même avoir besoin d'appeler l'outil `skill`**, directement
+  depuis ce que le modèle garde présent dans son contexte. Le paramètre
+  `name` (confirmé correct par une trace du round 7/9) n'est d'ailleurs
+  plus jamais mal orthographié une fois le contexte rétabli.
+
+**Conclusion** : un contexte tronqué à 4096 tokens (au lieu des 32768
+configurés) ne fait pas juste "répondre plus court" — il semble faire
+perdre au modèle le schéma exact des outils disponibles (~14 700 tokens
+de catalogue, voir section "Optimisation Mac Mini M4"), ce qui dégrade
+sa capacité à les appeler correctement et le fait déraper vers des
+réponses sans rapport une fois qu'il échoue en boucle. C'est la cause
+racine commune des échecs A.3/3a/3b/D.14/C.7 du round 14 — pas 5
+problèmes indépendants.
+
+**Confirmé par un passage complet de `suite-tests-reelle.sh` après le
+correctif** : 6 échecs → 1 seul. A.1/A.2/A.3/A.4 passent. **C.7 passe
+pour la première fois via le script automatique complet** (pas
+seulement un test ciblé comme au round 9) : un vrai verdict
+`controleur-qualite` consigné sur une tâche réelle. 3b (thème WordPress)
+est un succès vérifié de bout en bout — les 3 fichiers attendus
+existent bien sur disque, `style.css` contient le bon en-tête `Theme
+Name: test`. 5a/5b se comportent exactement comme conçus : 5a fusionne
+une proposition valide, 5b rejette une proposition invalide
+(`modifier-script` non autorisé) avant toute écriture.
+
+**Ce qui reste, et qui n'est PAS le glitch bénin du round 7** : 3a (page
+HTML5) échoue encore à D.14, mais cette fois `test-html5.html`
+**n'existe pas du tout** sur disque — vérifié directement. Contrairement
+au round 7 (où l'artefact de fin de tour survenait APRÈS une tâche déjà
+réussie, donc cosmétique), ici le modèle annonce l'intention ("Je vais
+créer...") puis tente directement d'appeler `controle-qualite` — avec
+la bonne clé `name` cette fois, mais en syntaxe brute non exécutée — **sans
+jamais créer le fichier**. Même contexte, même modèle, exécuté dans le
+même passage que 3b qui a pleinement réussi : donc pas un problème de
+contexte résiduel, plutôt un aléa ponctuel sur cette tâche précise. Pas
+encore assez de passages répétés pour savoir si c'est systématique sur
+la consigne HTML5 ou un raté isolé — à observer sur les prochains
+passages plutôt qu'à corriger à l'aveugle.
+
 ## 🖥️ Lancement simple et accès mobile
 
 Trois scripts optionnels, ajoutés après coup pour un usage quotidien plus
