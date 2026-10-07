@@ -1123,40 +1123,84 @@ actuel et la recommandation donnée au moment de la discussion.
 
 ## 📁 Contenu du paquet
 
+Inventaire réel (pas un plan) — régénéré à chaque fois qu'il dérive trop
+de `ls`, pour rester une référence fiable dans 6 mois plutôt qu'une
+intention datée.
+
 ```
 dsh-harness/
-├── .gitignore               # logs/, 06-data/memoire/, 02-plugins/, meta-index.json...
+├── .gitignore               # logs/, 06-data/memoire/, 02-plugins/, meta-index.json, test-round*.html...
 ├── package.json              # seule dépendance npm : @receptron/laya, optionnelle (moteur laya de decision-rapide.js)
-├── 01-skills/              # 19 skills (+ boucles-agentiques, gestion-memoire, auto-implementation,
-│                            #   ameliorateur-systeme séparé de ameliorateur, decision-rapide,
-│                            #   controleur-de-controle, journal-desaccords)
-├── 02-plugins/              # agentic-research, dsh-find-plugins (clonés à l'install)
-├── 03-workflows/            # 5 workflows JSON (schéma non-vérifiable formellement)
-│   ├── auto-amelioration.workflow.json   # propose → évalue → applique (auto-implementer.js)
-│   ├── controle-qualite.workflow.json    # v2.2.0 : + étape contre-verifier (double contrôle)
-│   └── systeme-auto-ameliorant-avec-controle.workflow.json  # v1.3.0 : identifier-meilleur via decision-rapide.js
+├── PISTES-EVOLUTION.md       # idées discutées mais pas encore commencées — état réel + recommandation pour chacune
+├── start.sh                  # point d'entrée interactif (dsh --profile web + watcher)
+│
+├── 01-skills/                 # 24 skills — voir leur description en tête de fichier pour le déclenchement
+│   ├── skill-controleur-qualite.md / skill-controleur-de-controle.md   # double contrôle d'une réponse
+│   ├── skill-decision-rapide.md / skill-ameliorateur.md / skill-ameliorateur-systeme.md
+│   ├── skill-auto-implementation.md                                    # documente auto-implementer.js
+│   ├── skill-gestion-memoire.md                                        # documente memoire-cli.js (dont backup/restore)
+│   ├── skill-journal-desaccords.md / skill-apprendre-des-echecs.md
+│   ├── skill-personnalite-et-sagesse.md / skill-consulter-sagesse-interne.md
+│   ├── skill-persona-relations-humaines.md + skill-cles-relationnelles.md (placeholder vide)
+│   ├── skill-raisonnement-scientifique.md
+│   ├── skill-apprentissage-par-confirmation.md                         # apprend des succès confirmés par l'utilisateur
+│   ├── skill-comparateur-scenarios.md                                  # A/B sur une tâche récurrente, garde le gagnant
+│   ├── skill-testeur-docker.md / skill-evaluateur.md / skill-analyse-objectifs.md
+│   ├── skill-boucles-agentiques.md / skill-detection-erreurs-silencieuses.md
+│   └── skill-extracteur-tests.md / skill-synthese-finale.md / skill-verifier-et-croiser.md
+│
+├── 02-plugins/                # agentic-research, dsh-find-plugins (clonés à l'install, hors git)
+│
+├── 03-workflows/               # 5 workflows JSON (schéma dsh non-vérifiable formellement)
+│   ├── auto-amelioration.workflow.json                  # propose → évalue → applique (auto-implementer.js)
+│   ├── controle-qualite.workflow.json                   # double contrôle
+│   ├── systeme-auto-ameliorant-avec-controle.workflow.json
+│   ├── meta-experimentation.workflow.json
+│   └── recherche-approfondie.workflow.json
+│
 ├── 04-scripts/
-│   ├── dsh-logger.js         # logs structurés + SILENT_ERROR (testé)
-│   ├── errors-cli.js         # consultation CLI du journal (testé)
-│   ├── watch-knowledge-base.js
+│   │ # Infrastructure (logs, mémoire, validation)
+│   ├── dsh-logger.js                  # logs structurés + SILENT_ERROR (testé)
+│   ├── errors-cli.js                  # consultation CLI du journal (testé)
+│   ├── memoire-cli.js                 # mémoire structurée CRUD + backup/restore (testé de bout en bout)
+│   ├── journal-desaccords.js          # historique JSONL append-only des fiable:false (testé)
+│   ├── valider-skills-workflows.js    # vérification déterministe skills/workflows (testé)
+│   ├── watch-knowledge-base.js        # indexe 06-data/ pour le RAG
+│   │ # Boucles agentiques et pipeline qualité
+│   ├── boucle-hook-stop.js            # boucle 04 : critère d'arrêt déterministe (testé)
+│   ├── boucle-surveillance.sh         # boucle 05 : surveillance périodique (testé)
+│   ├── decision-rapide.js             # décision rapide, moteurs ollama/laya (ollama testé via mock)
+│   ├── auto-implementer.js            # applique une proposition sur branche git dédiée (testé) ;
+│   │                                     refuse si HEAD est déjà sur une branche auto-amelioration/* orpheline
+│   ├── consigner-verdict-qualite.js   # étape obligatoire de skill-controleur-qualite (testé réel, round 8/9)
 │   ├── docker-test-runner.js
-│   ├── memoire-cli.js        # mémoire structurée CRUD (testé)
-│   ├── boucle-hook-stop.js   # boucle 04 : critère d'arrêt déterministe (testé)
-│   ├── boucle-surveillance.sh # boucle 05 : surveillance périodique (testé)
-│   ├── basculer-modele.sh    # bascule entre profils de 05-configs/modeles.yaml (testé)
-│   ├── valider-skills-workflows.js  # vérification déterministe skills/workflows (testé)
-│   ├── auto-implementer.js   # applique une proposition sur branche git dédiée (testé)
-│   ├── decision-rapide.js    # décision rapide, moteurs ollama/laya (ollama testé via mock)
-│   ├── journal-desaccords.js # historique JSONL append-only des fiable:false (testé)
-│   ├── suite-tests-reelle.sh # protocole de validation complète sur machine réelle (testé via stubs)
+│   │ # Installation et configuration machine
+│   ├── bootstrap-complet.sh           # point d'entrée unique, machine neuve → tout installé (testé via mocks)
+│   ├── install-plugins.sh             # plugins dsh corrigés (dsh-workflow, dsh-tui, etc.)
+│   ├── setup-local-model.sh           # bascule vers Ollama local + mémoire GPU (testé, fusion YAML)
+│   ├── basculer-modele.sh             # bascule entre profils de 05-configs/modeles.yaml (testé)
+│   ├── configurer-skills-dsh.sh       # déclare 01-skills/ à dsh (customSkillDirs, testé)
+│   ├── desactiver-recherche-web-cloud.sh  # désactive l'outil web câblé sur l'API cloud DeepSeek (testé)
 │   ├── security-check.sh
-│   ├── install-plugins.sh    # plugins corrigés (dsh-workflow, dsh-tui, etc.)
-│   └── setup-local-model.sh  # bascule vers Ollama local (testé, fusion YAML)
+│   │ # Confort au quotidien (optionnels)
+│   ├── creer-raccourci-lancement.sh   # icône .app double-cliquable (testé)
+│   ├── demarrer-dsh-web-reseau.sh     # dsh --profile web ouvert sur le WiFi local
+│   ├── installer-demarrage-auto.sh    # LaunchAgent macOS pour le script précédent
+│   └── suite-tests-reelle.sh          # protocole de validation complète sur machine réelle,
+│                                         contrôles A/C.7/D.14 qui font réellement échouer le script (testé via stubs)
+│
 ├── 05-configs/
-│   ├── settings.local-ollama.yaml   # schéma vérifié
-│   ├── profile-plugins.yml          # schéma non-vérifié, à confirmer
-│   └── modeles.yaml                 # profils de modèles nommés (LLM interchangeables)
-├── 06-data/                 # personnalite/ (dont valeurs.md), sagesse/, cours-techniques/, cours-webmarketing/, memoire/
-├── logs/
-└── start.sh
+│   ├── settings.local-ollama.yaml     # schéma vérifié
+│   ├── profile-plugins.yml            # schéma non-vérifié, à confirmer
+│   └── modeles.yaml                   # profils de modèles nommés (LLM interchangeables)
+│
+├── 06-data/
+│   ├── personnalite/                  # ton, valeurs (dont valeurs.md)
+│   ├── sagesse/
+│   │   ├── lecons-apprises.md         # alimenté par skill-apprendre-des-echecs
+│   │   └── citations-sages/           # citations + auteurs confiés par l'utilisateur (vide, prêt)
+│   ├── cours-techniques/ , cours-webmarketing/
+│   └── memoire/                       # hors git — memoire.json + backups/ (memoire-cli.js)
+│
+└── logs/                              # hors git — pipeline.jsonl + logs/validation-<horodatage>/
 ```

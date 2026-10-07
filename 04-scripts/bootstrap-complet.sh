@@ -20,6 +20,12 @@ cd "$(dirname "$0")/.."
 HARNESS_HOME="$(pwd)"
 export HARNESS_HOME
 
+# `set -u` sans `-e` volontairement : un prérequis manquant ne doit pas
+# arrêter le script immédiatement — on veut voir TOUS les problèmes en un
+# seul passage (étapes 1 à 11), pas s'arrêter au premier et faire relancer
+# le script autant de fois qu'il y a d'étapes en échec. `echec()` compte
+# plutôt qu'il n'arrête ; le code de sortie final (tout en bas) reflète
+# s'il y a eu au moins un échec.
 ECHECS=0
 etape() { echo ""; echo "━━━ $1 ━━━"; }
 echec() { ECHECS=$((ECHECS + 1)); echo "❌ $1"; }

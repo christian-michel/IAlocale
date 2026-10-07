@@ -154,6 +154,27 @@ du skill en conversation — est-ce que l'agent demande la confirmation au
 bon moment, pas trop souvent, et retrouve bien une réponse validée la
 fois suivante ?
 
+**Mise à jour — deux ajouts supplémentaires construits dans la même
+discussion**, en réponse à un besoin de réversibilité et de richesse
+contextuelle :
+- **Backup/restore pour la mémoire structurée**
+  (`memoire-cli.js backup/list-backups/restore`) — comblait un vrai
+  trou : `06-data/memoire/` est explicitement hors git
+  (`.gitignore` — "état d'exécution, propre à chaque machine"), donc
+  contrairement au reste du projet, aucun commit n'y donnait de point de
+  restauration. `clear` crée désormais un backup automatique avant
+  d'effacer. Testé de bout en bout (set → backup → modification →
+  restore → re-vérification).
+- **`01-skills/skill-comparateur-scenarios.md`** — formule deux approches
+  concrètes pour une tâche récurrente, les évalue avec
+  `skill-evaluateur`, garde le gagnant et l'affine par petites
+  variations à l'occasion suivante plutôt que de repartir de zéro.
+  Consigne chaque comparaison avec un contexte riche (tags
+  domaine/situation/contrainte, pas un mot-clé générique) — c'est cette
+  richesse-là qui construit, avec le temps, un vrai répertoire d'actions
+  adaptées au contexte plutôt qu'une réponse figée par type de tâche.
+  Jamais observé en conditions réelles.
+
 ## 5. Docker par projet, pour isoler plusieurs projets de code en parallèle
 
 **État actuel** : pas fait. Seule l'isolation ad hoc de `skill-testeur-docker`

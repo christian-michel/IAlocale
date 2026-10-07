@@ -72,6 +72,15 @@ function creerBackup(raison) {
   return nomFichier;
 }
 
+/** Transforme `process.argv` en objet `{ cle: valeur }`. Convention à
+ * connaître pour lire le reste du fichier : `--flag` suivi d'un mot qui
+ * ne commence pas par `--` devient `{ flag: "mot" }` ; `--flag` seul
+ * (ou suivi d'un autre `--flag`) devient `{ flag: true }`. C'est ce
+ * `true` que les blocs de commande plus bas testent (ex.
+ * `args.contenu === true`) pour détecter "le flag était là mais sans
+ * valeur", distinct de "le flag était absent" (`undefined`). Les
+ * arguments sans `--` (positionnels) sont rangés dans `args._` — c'est
+ * là que la commande elle-même (`set`, `get`, ...) est récupérée. */
 function parseArgs(argv) {
   const args = { _: [] };
   for (let i = 0; i < argv.length; i++) {
@@ -119,6 +128,9 @@ function sauvegarderMagasin(magasin) {
   }
 }
 
+/** `--tags a,b,c` → `["a", "b", "c"]`. `valeur === true` couvre le cas
+ * "--tags" tapé sans rien derrière (voir la convention de `parseArgs`
+ * ci-dessus) — traité comme "aucun tag", pas comme une erreur. */
 function parseTags(valeur) {
   if (!valeur || valeur === true) return [];
   return String(valeur).split(',').map(t => t.trim()).filter(Boolean);
@@ -126,6 +138,12 @@ function parseTags(valeur) {
 
 const args = parseArgs(process.argv.slice(2));
 const commande = args._[0];
+
+// Un bloc if/else par sous-commande CLI : chacun valide ses propres
+// arguments obligatoires (sinon affiche l'usage et sort en erreur),
+// charge le magasin si besoin (chargerMagasin), fait son opération, et
+// réécrit le magasin (sauvegarderMagasin) seulement s'il l'a modifié —
+// get/list/search sont en lecture seule, pas d'écriture après elles.
 
 if (commande === 'set') {
   if (!args.type || !args.contenu || args.contenu === true) {
@@ -154,6 +172,7 @@ if (commande === 'set') {
   console.log(JSON.stringify(magasin.entries[id], null, 2));
 
 } else if (commande === 'get') {
+  // Lecture exacte par id — pas de recherche floue ici, c'est le rôle de `search`.
   if (!args.id) {
     console.error('Usage : get --id <id>');
     process.exit(1);
@@ -167,6 +186,9 @@ if (commande === 'set') {
   console.log(JSON.stringify(entree, null, 2));
 
 } else if (commande === 'list') {
+  // Filtre par champ exact (type/tag) puis trie du plus récent au plus
+  // ancien (modifiee_le décroissant) — c'est pour ça qu'un `set --id`
+  // sur une entrée existante la fait remonter en tête de liste.
   const magasin = chargerMagasin();
   let entrees = Object.values(magasin.entries);
   if (args.type) entrees = entrees.filter(e => e.type === args.type);
@@ -177,6 +199,11 @@ if (commande === 'set') {
   console.log(JSON.stringify({ count: entrees.length, entrees }, null, 2));
 
 } else if (commande === 'search') {
+  // Recherche floue (sous-chaîne, insensible à la casse) sur le contenu
+  // ET sur les tags — contrairement à `list --tag` qui veut une
+  // correspondance exacte d'un seul tag. C'est pourquoi les skills
+  // documentent `search --q "mots-clés du contexte"` plutôt que `list`
+  // pour retrouver une entrée sans connaître son tag exact.
   if (!args.q) {
     console.error('Usage : search --q "texte" [--type <type>]');
     process.exit(1);
