@@ -1355,6 +1355,29 @@ par défaut, voir section "Modèles interchangeables") :
 ./04-scripts/setup-local-model.sh qwen3-coder:30b-a3b-q4_K_M
 ```
 
+**Question légitime à ce stade : qu'est-ce qui a changé entre les
+rounds 10-13 (3a semblait réussir) et maintenant (3a échoue
+systématiquement) ?** Vérifié : `dsh --version` est toujours
+`0.1.7-rc.2`, identique aux tout premiers rounds — pas de mise à jour
+de `dsh` en cause. `ollama --version` (`0.40.0` actuellement) n'avait
+jamais été noté dans les rounds précédents, donc une mise à jour
+silencieuse d'Ollama entre-temps ne peut pas être exclue formellement,
+faute de point de comparaison.
+
+Mais une explication plus simple, et directement vérifiée cette
+session, suffit à elle seule : **au round 10, "3a a réussi" reposait
+uniquement sur le texte final du modèle** ("score de 10/10", "validé
+avec succès") — personne n'avait vérifié que `test-html5.html`
+existait réellement sur disque, seul le comptage des logs (section 4)
+était en doute à l'époque. Cette session a prouvé, trois fois, avec
+deux modèles différents (round 15 passage 2, round 16, round 17), que
+cette confiance dans le texte final n'est pas fondée : le modèle peut
+affirmer un succès alors que rien n'a été écrit. Le contrôle D.14
+(round 13) et les vérifications manuelles de fichiers (cette session)
+sont des ajouts récents au protocole de test, pas le bug lui-même —
+3a n'a probablement jamais été fiable, simplement personne ne l'avait
+encore vérifié d'assez près pour s'en apercevoir.
+
 ## 🖥️ Lancement simple et accès mobile
 
 Trois scripts optionnels, ajoutés après coup pour un usage quotidien plus
