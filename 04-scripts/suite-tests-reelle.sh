@@ -43,6 +43,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 export HARNESS_HOME="$(pwd)"
+# Repli par défaut utilisé par les scripts Node (voir 04-scripts/config.js)
+# quand HARNESS_HOME ne leur est pas transmis — une seule déclaration ici,
+# réutilisée par les deux contrôles C.7 ci-dessous plutôt que répétée.
+HARNESS_HOME_REPLI="$HOME/dsh-harness"
 
 HORODATAGE=$(date -u +"%Y%m%dT%H%M%SZ")
 DOSSIER="logs/validation-$HORODATAGE"
@@ -197,7 +201,7 @@ journal ""
 # HARNESS_HOME n'est pas toujours transmis à l'outil bash de dsh, le
 # verdict peut atterrir dans le repli par défaut de dsh-logger.js).
 VERDICTS_AVANT_PROJET=$(grep -o '"component":"controleur-qualite"' "$HARNESS_HOME/logs/pipeline.jsonl" 2>/dev/null | wc -l | tr -d ' ')
-VERDICTS_AVANT_REPLI=$(grep -o '"component":"controleur-qualite"' "$HOME/dsh-harness/logs/pipeline.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+VERDICTS_AVANT_REPLI=$(grep -o '"component":"controleur-qualite"' "$HARNESS_HOME_REPLI/logs/pipeline.jsonl" 2>/dev/null | wc -l | tr -d ' ')
 
 journal "  3a. Page HTML5"
 mkdir -p "$DOSSIER/livrables"
@@ -250,13 +254,13 @@ journal ""
 
 journal "  C.7. Verdict controleur-qualite réellement consigné (via consigner-verdict-qualite.js)"
 VERDICTS_APRES_PROJET=$(grep -o '"component":"controleur-qualite"' "$HARNESS_HOME/logs/pipeline.jsonl" 2>/dev/null | wc -l | tr -d ' ')
-VERDICTS_APRES_REPLI=$(grep -o '"component":"controleur-qualite"' "$HOME/dsh-harness/logs/pipeline.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+VERDICTS_APRES_REPLI=$(grep -o '"component":"controleur-qualite"' "$HARNESS_HOME_REPLI/logs/pipeline.jsonl" 2>/dev/null | wc -l | tr -d ' ')
 NOUVEAUX_PROJET=$((VERDICTS_APRES_PROJET - VERDICTS_AVANT_PROJET))
 NOUVEAUX_REPLI=$((VERDICTS_APRES_REPLI - VERDICTS_AVANT_REPLI))
 if [ "$NOUVEAUX_PROJET" -gt 0 ]; then
     journal "     ✅ $NOUVEAUX_PROJET nouveau(x) verdict(s) consigné(s) dans $HARNESS_HOME/logs/pipeline.jsonl"
 elif [ "$NOUVEAUX_REPLI" -gt 0 ]; then
-    journal "     ⚠️  $NOUVEAUX_REPLI nouveau(x) verdict(s) trouvé(s), mais dans ~/dsh-harness/logs/pipeline.jsonl (repli par défaut) plutôt que dans le dépôt — problème HARNESS_HOME connu, voir README round 11. Le mécanisme fonctionne, pas un échec de ce contrôle."
+    journal "     ⚠️  $NOUVEAUX_REPLI nouveau(x) verdict(s) trouvé(s), mais dans $HARNESS_HOME_REPLI/logs/pipeline.jsonl (repli par défaut) plutôt que dans le dépôt — problème HARNESS_HOME connu, voir README round 11. Le mécanisme fonctionne, pas un échec de ce contrôle."
 else
     signaler_echec "C.7 : aucun nouveau verdict controleur-qualite consigné nulle part sur les tâches 3a/3b — l'étape obligatoire du round 8 (consigner-verdict-qualite.js) n'a probablement pas été suivie."
 fi

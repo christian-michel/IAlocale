@@ -24,7 +24,11 @@
  *     note est refusé avec ce moteur plutôt que d'inventer une confiance.
  *     Qualité en français NON VÉRIFIÉE (benchmarks publiés tous
  *     anglophones) — voir --multilingue, qui change de checkpoint sans
- *     garantir le résultat.
+ *     garantir le résultat. Implémentation entière isolée dans
+ *     04-scripts/moteur-laya.js (seul fichier à toucher si Laya doit
+ *     être remplacé par un autre moteur local un jour) — ce fichier-ci
+ *     n'importe que decisionViaLaya, sans jamais référencer
+ *     @receptron/laya ni son API directement.
  *
  * Dans les deux cas : appel direct, PAS par `dsh` — évite le coût caché
  * du catalogue d'outils de l'agent (voir README, "Optimisation Mac Mini
@@ -71,6 +75,7 @@ import path from 'path';
 import os from 'os';
 import { spawnSync } from 'child_process';
 import { logInfo, logWarning, logError } from './dsh-logger.js';
+import { decisionViaLaya } from './moteur-laya.js';
 
 const COMPOSANT_DEFAUT = 'decision-rapide';
 const TYPES_VALIDES = ['oui-non', 'choix', 'note'];
@@ -247,82 +252,6 @@ async function decisionViaOllama({ args, composant, type, choix, echelleMin, ech
   }
 
   return { decisionBrute, dureeMs, modele };
-}
-
-// --- Moteur "laya" ----------------------------------------------------------
-
-async function decisionViaLaya({ args, composant, type, choix, echelleMin, echelleMax }) {
-  if (type === 'note') {
-    // Le type "score" de Laya renvoie bien un nombre, mais aucune mesure
-    // de confiance associée n'est documentée (contrairement à "choice"
-    // et son champ "probabilities") — plutôt que d'inventer une valeur
-    // de confiance arbitraire, ce type est refusé avec ce moteur.
-    console.error('❌ --type note n\'est pas supporté avec --moteur laya (pas de mesure de confiance confirmée pour son type "score"). Utilise --moteur ollama.');
-    process.exit(1);
-  }
-
-  let LayaModule;
-  try {
-    LayaModule = await import('@receptron/laya');
-  } catch (err) {
-    logError(composant, "Le paquet @receptron/laya n'est pas installé", { err });
-    console.error('❌ @receptron/laya n\'est pas installé. Lance `npm install` à la racine du dépôt, puis réessaie (voir package.json).');
-    process.exit(1);
-  }
-
-  const multilingue = Boolean(args.multilingue);
-  logInfo(composant, `Décision rapide demandée (moteur=laya, type=${type}, checkpoint=${multilingue ? 'multilingual' : 'défaut'})`);
-
-  const debutChargement = Date.now();
-  let laya;
-  try {
-    laya = await LayaModule.Laya.load(multilingue ? { subfolder: 'multilingual' } : undefined);
-  } catch (err) {
-    logError(composant, 'Échec du chargement du modèle Laya', { err });
-    console.error(`❌ Échec du chargement de Laya : ${err.message}`);
-    process.exit(1);
-  }
-  const dureeChargementMs = Date.now() - debutChargement;
-
-  // Une seule question par appel, sous une clé fixe — decision-rapide.js
-  // ne demande jamais plusieurs décisions en une fois.
-  const question = type === 'oui-non'
-    ? { decision: { type: 'noul', instructions: args.question } }
-    : { decision: { type: 'choice', instructions: args.question, criteria: Object.fromEntries(choix.map(c => [c, c])) } };
-  // NB : Laya attend normalement une description par option dans
-  // "criteria" (ex. {billing: "paiements, remboursements..."}) — l'API
-  // actuelle de decision-rapide.js ne transporte que des libellés plats
-  // (--choix "a,b,c"), donc chaque option se décrit ici par elle-même.
-  // Une vraie description par option demanderait d'étendre le CLI.
-
-  const debutDecision = Date.now();
-  let resultat;
-  try {
-    resultat = await laya.systemOne({ contexte: args.contexte || '' }, question);
-  } catch (err) {
-    logError(composant, 'Échec de la décision Laya', { err });
-    console.error(`❌ Échec de la décision Laya : ${err.message}`);
-    try { await laya.close(); } catch { /* déjà en échec, rien de plus à faire */ }
-    process.exit(1);
-  }
-  const dureeDecisionMs = Date.now() - debutDecision;
-  await laya.close();
-
-  let decisionBrute;
-  if (type === 'oui-non') {
-    const p = resultat.answers.decision.noul;
-    decisionBrute = { decision: p >= 0.5, confiance: p >= 0.5 ? p : 1 - p };
-  } else {
-    const c = resultat.answers.decision.choice;
-    decisionBrute = { decision: c, confiance: resultat.answers.decision.probabilities?.[c] };
-  }
-
-  return {
-    decisionBrute,
-    dureeMs: dureeChargementMs + dureeDecisionMs,
-    modele: 'laya',
-    detailTiming: { chargement_ms: dureeChargementMs, decision_ms: dureeDecisionMs },
-  };
 }
 
 // --- Orchestration ----------------------------------------------------------

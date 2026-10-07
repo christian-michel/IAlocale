@@ -387,6 +387,43 @@ le profil et délègue à `setup-local-model.sh` :
 ./04-scripts/basculer-modele.sh reflexion    # bascule vers le profil "reflexion"
 ```
 
+## 🧩 Portabilité : un seul endroit à changer par élément interchangeable
+
+Trois choses de ce projet sont pensées pour pouvoir être remplacées sans
+toucher au reste du code — chacune n'existe qu'à un seul endroit :
+
+- **Emplacement de l'installation (`HARNESS_HOME`)** : avant, `const
+  HARNESS_HOME = process.env.HARNESS_HOME || path.join(os.homedir(),
+  'dsh-harness')` était redéclaré à l'identique dans 4 fichiers
+  (`dsh-logger.js`, `journal-desaccords.js`, `watch-knowledge-base.js`,
+  `memoire-cli.js`). Désormais, `04-scripts/config.js` est la seule
+  déclaration ; les quatre fichiers l'importent
+  (`import { HARNESS_HOME } from './config.js'`). Déplacer
+  l'installation ne demande toujours que de positionner la variable
+  d'environnement `HARNESS_HOME` (déjà le mécanisme existant) — mais
+  il n'y a plus qu'un seul fichier à vérifier si ce mécanisme doit
+  changer de nature un jour.
+- **Nom du modèle LLM** : `05-configs/modeles.yaml` (`profil-par-defaut`)
+  est l'unique source de vérité, déjà lue par `basculer-modele.sh`. Avant
+  ce refactor, `setup-local-model.sh` gardait son propre id de modèle en
+  dur comme valeur par défaut (`MODEL="${1:-qwen3-coder:...}"`) — un
+  deuxième endroit qui pouvait diverger du premier. Il résout maintenant
+  ce même défaut depuis `05-configs/modeles.yaml` quand aucun argument
+  n'est passé, avec le même mécanisme Python/YAML que `basculer-modele.sh`
+  (testé via mocks : résolution confirmée identique dans les deux cas,
+  argument explicite toujours prioritaire).
+- **Laya** : toute l'intégration avec `@receptron/laya` (chargement du
+  modèle, `systemOne`, fermeture, conversion du résultat) est désormais
+  isolée dans `04-scripts/moteur-laya.js`, qui exporte une seule fonction
+  `decisionViaLaya`. `decision-rapide.js` l'importe et ne référence plus
+  jamais `@receptron/laya` ni son API directement. Remplacer Laya par un
+  autre moteur de décision rapide local ne devrait demander de toucher
+  qu'à ce fichier.
+
+`suite-tests-reelle.sh` a aussi vu ses deux occurrences du chemin de
+repli `$HOME/dsh-harness` (round 11) fusionnées dans une seule variable
+`HARNESS_HOME_REPLI`, déclarée une fois en haut du script.
+
 ## 🚀 Installation
 
 ### En une seule commande (machine neuve)
@@ -1130,7 +1167,7 @@ intention datée.
 ```
 dsh-harness/
 ├── .gitignore               # logs/, 06-data/memoire/, 02-plugins/, meta-index.json, test-round*.html...
-├── package.json              # seule dépendance npm : @receptron/laya, optionnelle (moteur laya de decision-rapide.js)
+├── package.json              # seule dépendance npm : @receptron/laya, optionnelle (moteur-laya.js, utilisé par decision-rapide.js)
 ├── PISTES-EVOLUTION.md       # idées discutées mais pas encore commencées — état réel + recommandation pour chacune
 ├── start.sh                  # point d'entrée interactif (dsh --profile web + watcher)
 │
@@ -1160,6 +1197,7 @@ dsh-harness/
 │
 ├── 04-scripts/
 │   │ # Infrastructure (logs, mémoire, validation)
+│   ├── config.js                      # HARNESS_HOME centralisé — seule déclaration, importée partout (testé)
 │   ├── dsh-logger.js                  # logs structurés + SILENT_ERROR (testé)
 │   ├── errors-cli.js                  # consultation CLI du journal (testé)
 │   ├── memoire-cli.js                 # mémoire structurée CRUD + backup/restore (testé de bout en bout)
@@ -1170,6 +1208,7 @@ dsh-harness/
 │   ├── boucle-hook-stop.js            # boucle 04 : critère d'arrêt déterministe (testé)
 │   ├── boucle-surveillance.sh         # boucle 05 : surveillance périodique (testé)
 │   ├── decision-rapide.js             # décision rapide, moteurs ollama/laya (ollama testé via mock)
+│   ├── moteur-laya.js                 # toute l'intégration @receptron/laya, isolée (testé via mock)
 │   ├── auto-implementer.js            # applique une proposition sur branche git dédiée (testé) ;
 │   │                                     refuse si HEAD est déjà sur une branche auto-amelioration/* orpheline
 │   ├── consigner-verdict-qualite.js   # étape obligatoire de skill-controleur-qualite (testé réel, round 8/9)
@@ -1177,7 +1216,8 @@ dsh-harness/
 │   │ # Installation et configuration machine
 │   ├── bootstrap-complet.sh           # point d'entrée unique, machine neuve → tout installé (testé via mocks)
 │   ├── install-plugins.sh             # plugins dsh corrigés (dsh-workflow, dsh-tui, etc.)
-│   ├── setup-local-model.sh           # bascule vers Ollama local + mémoire GPU (testé, fusion YAML)
+│   ├── setup-local-model.sh           # bascule vers Ollama local + mémoire GPU (testé, fusion YAML) ;
+│   │                                     sans argument, résout le modèle par défaut depuis modeles.yaml
 │   ├── basculer-modele.sh             # bascule entre profils de 05-configs/modeles.yaml (testé)
 │   ├── configurer-skills-dsh.sh       # déclare 01-skills/ à dsh (customSkillDirs, testé)
 │   ├── desactiver-recherche-web-cloud.sh  # désactive l'outil web câblé sur l'API cloud DeepSeek (testé)

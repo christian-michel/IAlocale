@@ -21,9 +21,8 @@
 
 import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import path from 'path';
-import os from 'os';
+import { HARNESS_HOME } from './config.js';
 
-const HARNESS_HOME = process.env.HARNESS_HOME || path.join(os.homedir(), 'dsh-harness');
 const LOG_DIR = path.join(HARNESS_HOME, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'pipeline.jsonl');
 

@@ -5,14 +5,39 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-MODEL="${1:-qwen3-coder:30b-a3b-q4_K_M}"
+CONFIG_MODELES="05-configs/modeles.yaml"
 DSH_SETTINGS="$HOME/.dsh/settings.yaml"
 CONTEXT_LENGTH=32768
 
-echo "🦙 Configuration du modèle local : $MODEL"
-
 command -v ollama >/dev/null 2>&1 || { echo "❌ Ollama n'est pas installé. brew install ollama"; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "❌ python3 requis pour fusionner le YAML."; exit 1; }
+
+# Sans argument, résout le modèle par défaut depuis 05-configs/modeles.yaml
+# (profil-par-defaut) plutôt que de garder un id en dur ici — seule source
+# de vérité pour le nom du modèle, même fichier que basculer-modele.sh lit
+# pour résoudre un profil nommé.
+if [ -n "${1:-}" ]; then
+    MODEL="$1"
+else
+    [ -f "$CONFIG_MODELES" ] || { echo "❌ Fichier introuvable : $CONFIG_MODELES"; exit 1; }
+    MODEL=$(python3 - "$CONFIG_MODELES" << 'PYEOF'
+import sys
+try:
+    import yaml
+except ImportError:
+    print("❌ PyYAML manquant. Installe-le avec : pip3 install pyyaml --break-system-packages", file=sys.stderr)
+    sys.exit(1)
+with open(sys.argv[1]) as f:
+    data = yaml.safe_load(f) or {}
+defaut = data.get("profil-par-defaut", "")
+info = (data.get("profils") or {}).get(defaut)
+print(info["modele"] if info else "", end="")
+PYEOF
+    ) || exit 1
+    [ -n "$MODEL" ] || { echo "❌ Impossible de résoudre le profil par défaut depuis $CONFIG_MODELES."; exit 1; }
+fi
+
+echo "🦙 Configuration du modèle local : $MODEL"
 
 # Redémarre le vrai serveur Ollama en cours d'exécution, quel que soit son
 # mode d'installation — trouvé en pratique (voir README, "Validation sur

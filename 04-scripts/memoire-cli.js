@@ -37,11 +37,10 @@
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, copyFileSync } from 'fs';
 import path from 'path';
-import os from 'os';
 import crypto from 'crypto';
 import { logInfo, logError } from './dsh-logger.js';
+import { HARNESS_HOME } from './config.js';
 
-const HARNESS_HOME = process.env.HARNESS_HOME || path.join(os.homedir(), 'dsh-harness');
 const MEMOIRE_DIR = path.join(HARNESS_HOME, '06-data', 'memoire');
 const MEMOIRE_FILE = path.join(MEMOIRE_DIR, 'memoire.json');
 const BACKUPS_DIR = path.join(MEMOIRE_DIR, 'backups');

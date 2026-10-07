@@ -2,10 +2,9 @@ import { watch } from 'fs';
 import { readFile, writeFile, readdir, stat, mkdir } from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
-import os from 'os';
 import { logInfo, logSilentError } from './dsh-logger.js';
+import { HARNESS_HOME } from './config.js';
 
-const HARNESS_HOME = process.env.HARNESS_HOME || path.join(os.homedir(), 'dsh-harness');
 const KNOWLEDGE_BASE = path.join(HARNESS_HOME, '06-data');
 const INDEX_FILE = path.join(KNOWLEDGE_BASE, 'meta-index.json');
 // 'memoire' contient des données structurées (memoire.json, géré par

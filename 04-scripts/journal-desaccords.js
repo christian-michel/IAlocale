@@ -34,11 +34,10 @@
  */
 import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import path from 'path';
-import os from 'os';
 import { logInfo, logError } from './dsh-logger.js';
+import { HARNESS_HOME } from './config.js';
 
 const COMPOSANT_DEFAUT = 'journal-desaccords';
-const HARNESS_HOME = process.env.HARNESS_HOME || path.join(os.homedir(), 'dsh-harness');
 const JOURNAL_DIR = path.join(HARNESS_HOME, '06-data', 'memoire');
 const JOURNAL_FILE = path.join(JOURNAL_DIR, 'desaccords-laya.jsonl');
 
