@@ -1114,6 +1114,13 @@ volontairement vide. Pour l'enrichir : ajoute des fichiers `.md` dans
 leçons techniques auto-générées — réflexions, principes). Le watcher les
 indexe automatiquement ; aucun changement de code n'est nécessaire.
 
+## 🗺️ Pistes d'évolution
+
+Voir [`PISTES-EVOLUTION.md`](./PISTES-EVOLUTION.md) — idées discutées mais
+pas encore commencées (réponse toujours en français, un LLM par expertise,
+sandbox Docker par projet, PDF pour le RAG...), chacune avec son état réel
+actuel et la recommandation donnée au moment de la discussion.
+
 ## 📁 Contenu du paquet
 
 ```
