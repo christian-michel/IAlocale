@@ -1411,6 +1411,40 @@ emplacements que `skill-personnalite-et-sagesse.md` et
 `skill-persona-relations-humaines.md` attendaient vides jusqu'ici (voir
 `PISTES-EVOLUTION.md`, point 4). Contenu personnel, non détaillé ici.
 
+### Round 19 — premier 0 échec complet, vérifié sur disque (pas juste la narration)
+
+Passage sur `dsh 0.2.1-alpha.1` (mis à jour au round 18), `qwen3-coder`,
+contexte sain : **A.1/A.2/A.3/A.4, D.14 et C.7 tous verts — le premier
+0 échec de toute cette investigation (rounds 1 à 19).**
+
+**Vérifié indépendamment, pas seulement pris pour argent comptant** —
+exactement la discipline qu'on a dû apprendre à la dure dans les rounds
+précédents : la narration de 3b était cette fois inhabituellement
+courte (ne décrivait même pas avoir créé de fichiers), ce qui a justifié
+une vérification directe plutôt que de se fier au "0 échec" affiché :
+```bash
+find logs/validation-<horodatage>/livrables -type f
+```
+a bien confirmé les 4 fichiers attendus (`test-html5.html` +
+`theme-test/{style,index,functions}.{css,php}`), et le contenu de
+`style.css` est un vrai CSS complet avec le bon en-tête
+`Theme Name: test` — pas un fichier vide ou tronqué.
+
+**À ne pas sur-interpréter** : un seul passage propre n'est pas une
+garantie que 3a/3b sont désormais fiables à 100% — les rounds
+précédents ont montré à quel point c'est intermittent (0 échec un jour,
+glitch de template le lendemain, sur le même modèle et la même
+machine). C'est un bon signal, pas une clôture du dossier.
+
+**Au passage, `skill-clarifier-la-demande` testé pour la première fois**,
+via `dsh --profile headless` — a correctement identifié la demande comme
+trop vague et proposé de poser des questions, mais la tentative de
+répondre "Oui" ensuite a échoué (`zsh: command not found: Oui`) : pas un
+bug, `headless` répond à **une seule** tâche puis s'arrête (voir son
+`--help` — *"Answer one task and exit"*), ce n'est pas un profil de
+conversation continue. Pour un vrai aller-retour avec ce skill, utiliser
+`dsh --profile web` ou `dsh --profile tui` à la place.
+
 ## 🖥️ Lancement simple et accès mobile
 
 Trois scripts optionnels, ajoutés après coup pour un usage quotidien plus
