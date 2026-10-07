@@ -1082,6 +1082,92 @@ doivent simultanément détecter un vrai problème injecté (5 échecs, code
 tourné que contre un dépôt jetable avec `dsh`/`ollama` simulés depuis cet
 environnement — jamais la vraie machine.
 
+### Round 14 — premier passage complet des contrôles A/C.7/D.14 en conditions réelles
+
+Premier vrai lancement de `suite-tests-reelle.sh` depuis la machine
+réelle (round 13 ne les avait vérifiés que contre un dépôt jetable).
+Bilan : 5 échecs, mais tous expliqués — aucun n'est une régression du
+refactor de portabilité qui précède ce round (`config.js`,
+`moteur-laya.js`, résolution du modèle par défaut) : ces contrôles
+testent `dsh`/Ollama eux-mêmes, pas le code JS/shell qui vient d'être
+réorganisé.
+
+**✅ Confirmé pour la première fois, et c'est la bonne nouvelle du
+round** : les sections 1 et 2 passent proprement. `decision-rapide.js`
+(moteur `ollama`) vient de tourner contre un vrai Ollama pour la
+première fois — 3 décisions réelles (code/juridique/comptable), 856 ms à
+1846 ms chacune, confiance 0.9-0.95, JSON conforme au schéma à chaque
+fois. Le commentaire d'en-tête de `decision-rapide.js` qui disait
+"non testé contre un vrai Ollama" est maintenant corrigé en conséquence.
+A.4 (tool-web désactivé) passe aussi : le correctif du round 12 tient
+toujours.
+
+**❌ A.1/A.2 — déjà connu, pas une régression** : `iogpu.wired_limit_mb`
+revenu à 0 et contexte servi à 4096 au lieu de 32768. Exactement le
+symptôme des rounds 4/5/12 : ces deux réglages ne survivent jamais à un
+redémarrage ou une mise en veille de la machine, et `setup-local-model.sh`
+n'avait pas été relancé depuis. **Correctif inchangé** : relancer
+`./04-scripts/setup-local-model.sh` (sans argument : résout maintenant
+le modèle par défaut depuis `05-configs/modeles.yaml`, voir la section
+"Portabilité" plus haut).
+
+**❌ A.3 et 3a/3b — une vraie piste, pas encore confirmée.** Les deux
+donnent une réponse de `dsh` totalement hors sujet, qui mentionne des
+noms d'outils/skills qui n'existent nulle part dans ce dépôt
+(`todo_write`, `razor-qa`, un tool "load") — pas le symptôme déjà
+documenté (un `<tool_call>` résiduel en fin de réponse par ailleurs
+correcte), mais une réponse entière sans rapport avec la question posée.
+Deux pistes, pas confondues :
+- **Pour 3a/3b** : explicable en grande partie par un avertissement que
+  le script affichait déjà juste avant — `AUTORISER_ECRITURE_HEADLESS`
+  n'était pas positionné, donc l'écriture de fichiers demandée
+  (page HTML5, thème WordPress) restait bloquée par `approval.policy=ask`
+  sans personne pour répondre en headless. Un agent bloqué sur une
+  approbation qu'il ne peut pas obtenir peut plausiblement partir sur
+  autre chose plutôt que d'échouer proprement. **Prochain test concret** :
+  relancer avec `AUTORISER_ECRITURE_HEADLESS=1 ./04-scripts/suite-tests-reelle.sh`
+  (accepte la mise en garde de `skill-decision-rapide.md` : ça désactive
+  le sandbox, pas seulement l'approbation) et voir si 3a/3b réussissent
+  réellement une fois l'écriture débloquée.
+- **Pour A.3**, cette explication ne suffit pas : la question ("Liste
+  les skills que tu as à disposition.") ne demande aucune écriture, donc
+  aucune approbation à bloquer — et la réponse part quand même sur une
+  tâche sans rapport ("Research the impact of AI on society" via un
+  outil de todo). **Hypothèse à vérifier, pas encore testée** : un état
+  de conversation qui persiste entre deux invocations séparées de
+  `dsh --profile headless` (un profil qui garderait un historique plutôt
+  que de repartir à zéro à chaque appel), qui ferait déraper une
+  question simple si un appel précédent sur ce même profil avait laissé
+  un contexte inachevé. **Prochain test concret** : relancer exactement
+  `dsh --profile headless --json "Liste les skills que tu as à
+  disposition."` isolément, juste après un `dsh --profile headless
+  --new` (ou l'équivalent qui repart d'un historique vide) si cette
+  option existe, pour voir si la réponse reste cohérente hors du script
+  complet.
+
+**❌ D.14 et C.7 — conséquences directes de 3a/3b, pas des échecs
+indépendants.** D.14 détecte exactement la syntaxe d'appel d'outil
+malformée produite par 3a/3b ci-dessus (fonctionne comme prévu — c'est
+le contrôle qui est censé la détecter). C.7 ne trouve aucun nouveau
+verdict `controleur-qualite` parce qu'aucune tâche 3a/3b n'est allée
+jusqu'au contrôle qualité. Les deux devraient repasser au vert dès que
+3a/3b réussissent réellement (voir piste `AUTORISER_ECRITURE_HEADLESS`
+ci-dessus).
+
+**❌ 5a/5b — le script a eu raison de refuser, pas un bug.**
+`auto-implementer.js` refuse volontairement de tourner sur un arbre de
+travail qui n'est pas propre (`git status --porcelain` non vide), pour
+ne jamais embarquer un travail en cours sans rapport dans un commit
+d'auto-amélioration — c'est le comportement voulu, testé et documenté
+dès sa conception. Sur cette machine, le dépôt avait un dossier `src/`
+non suivi au moment du test. **Pour tester réellement 5a/5b** : repartir
+d'un arbre propre (`git stash -u`, ou trancher ce que `src/` doit
+devenir) avant de relancer `suite-tests-reelle.sh`.
+
+**Reste ouvert** : confirmer A.3 isolément, confirmer 3a/3b avec
+`AUTORISER_ECRITURE_HEADLESS=1`, puis D.14/C.7/5a/5b devraient se
+résoudre en cascade plutôt qu'individuellement.
+
 ## 🖥️ Lancement simple et accès mobile
 
 Trois scripts optionnels, ajoutés après coup pour un usage quotidien plus

@@ -34,10 +34,14 @@
  * du catalogue d'outils de l'agent (voir README, "Optimisation Mac Mini
  * M4", ~14 700 tokens de schémas d'outils pour une tâche triviale).
  *
- * ⚠️ Moteur "ollama" non testé contre un vrai Ollama (absent de mon
- * environnement) — voir la validation post-hoc (validerDecision) plutôt
- * que la confiance aveugle au modèle. Moteur "laya" non exécuté non plus,
- * mais pour une raison précise et vérifiée (pas juste "pas essayé") :
+ * ✅ Moteur "ollama" confirmé contre un vrai Ollama sur machine réelle
+ * (Mac Mini M4, `suite-tests-reelle.sh` round 14, voir README) : 3
+ * décisions réelles (code/juridique/comptable), ~1-2s chacune, confiance
+ * 0.9-0.95, JSON conforme au schéma à chaque fois. La validation post-hoc
+ * (validerDecision) reste utile en continu — un résultat conforme une
+ * fois n'empêche pas une dérive plus tard — mais ce n'est plus la seule
+ * garantie. Moteur "laya" toujours non exécuté, pour une raison précise
+ * et vérifiée (pas juste "pas essayé") :
  * `npm install` échoue ici car la dépendance `onnxruntime-node` télécharge
  * son binaire natif depuis le flux Nuget (api.nuget.org) au moment de
  * l'installation — pas depuis npm — et ce host est bloqué par le proxy
