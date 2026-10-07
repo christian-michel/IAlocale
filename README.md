@@ -1302,6 +1302,59 @@ c'est bien `dsh` lui-même qui ne gère pas plusieurs appels d'outils en
 une seule réponse, quel que soit le modèle — pas encore testé, à faire
 avant de conclure.
 
+### Round 17 — même consigne contre `mistral-small3.2` : le glitch de template disparaît, mais une autre limite apparaît
+
+Une incidente d'abord, sans rapport avec le fond : le premier essai
+contre `mistral-small3.2` a échoué avec `UNKNOWN_MODEL` (le profil
+`headless` réclamait encore `qwen3-coder`). Pas un bug de nos scripts —
+`~/.dsh/profiles/headless/cordis.patch.yml` se régénère depuis la
+config globale à chaque lancement de `dsh`, et affichait déjà le bon
+modèle (`mistral-small3.2:latest`, contexte 32768) dès l'appel suivant.
+Juste un essai relancé une seconde fois trop tôt après le changement de
+modèle.
+
+**La vraie comparaison, une fois corrigée.** Avec `mistral-small3.2`, le
+glitch de template du round 16 (texte brut jamais reconnu comme
+`tool_call`) **n'apparaît pas** : tous les appels sont correctement
+structurés et dispatchés par `dsh` — confirme que ce glitch précis est
+propre à la façon dont `qwen3-coder` formate ses appels, pas une
+limite générale de `dsh`.
+
+Mais la tâche échoue quand même, pour une raison différente :
+1. `mistral-small3.2` appelle d'abord `create_goal` (un vrai outil
+   `dsh`, pas une invention — ça confirme rétrospectivement que les
+   `update_goal`/`todo_write` vus aux rounds 14/15 avec `qwen3-coder`
+   n'étaient pas de pures hallucinations, mais des tentatives
+   déformées du **même** mécanisme réel de suivi d'objectif). Réussit.
+2. Il rédige le HTML5 correctement (code valide, titre, paragraphe,
+   bouton).
+3. Il appelle l'outil `write` avec `{"path": "...", "content": "..."}`
+   — mais le vrai paramètre attendu est `file_path`, pas `path`.
+   L'erreur le dit explicitement : `missing required property
+   "file_path"`.
+4. **Il n'essaie jamais une seconde fois avec la bonne clé** — il
+   décrit son plan en prose sur deux tours de plus ("je vais créer le
+   dossier, puis sauvegarder le fichier...") sans jamais relancer
+   l'appel, et le tour se termine sans fichier créé.
+
+**Constat qui dépasse le seul `qwen3-coder`** : les deux modèles testés
+devinent une mauvaise clé de paramètre pour un outil (`skill_name` vs
+`name` pour l'un, `path` vs `file_path` pour l'autre), et **aucun des
+deux ne se corrige après avoir reçu un message d'erreur qui nomme
+pourtant explicitement le bon champ**. Changer de modèle ne fait pas
+disparaître l'échec de la tâche 3a — il change seulement la façon dont
+elle échoue (glitch de template invisible pour `qwen3-coder`, erreur
+réelle mais jamais corrigée pour `mistral-small3.2`). Pas une piste à
+creuser davantage par simple changement de modèle : les deux modèles
+locaux disponibles ici échouent sur cette tâche précise, pour des
+raisons différentes mais avec le même symptôme final (pas de fichier).
+
+**Remis `qwen3-coder` en modèle actif après ce test** (celui recommandé
+par défaut, voir section "Modèles interchangeables") :
+```bash
+./04-scripts/setup-local-model.sh qwen3-coder:30b-a3b-q4_K_M
+```
+
 ## 🖥️ Lancement simple et accès mobile
 
 Trois scripts optionnels, ajoutés après coup pour un usage quotidien plus
