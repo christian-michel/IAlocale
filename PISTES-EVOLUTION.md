@@ -16,6 +16,20 @@ du modèle par défaut (`agent-default-model`), sans consigne explicite.
 `@deepseek-ai/dsh-system-prompt`) ou un skill dédié. Le plus simple des cinq
 points listés ici — aucune contrainte technique identifiée.
 
+**Point d'ancrage concret, déjà vu dans un vrai `--dump-config`** (round 9,
+voir README) :
+```yaml
+- id: system-prompt
+  config:
+    personaPrefix: You are a coding agent powered by the {{model}} model.
+    personaSuffix: Your working directory is {{cwd}}.
+```
+C'est très probablement le bon endroit pour glisser la consigne de langue
+(ex. ajouter au `personaPrefix` : "Réponds toujours en français, sauf si la
+question est posée dans une autre langue.") — à vérifier que ce champ
+accepte une valeur personnalisée via un patch de profil, comme
+`customSkillDirs`/`tool-web` l'ont déjà été (round 6/12).
+
 ## 2. Un LLM par expertise (code, comptabilité, langue, recherche...)
 
 **État actuel** : un seul modèle actif à la fois (`05-configs/modeles.yaml`,
@@ -32,6 +46,53 @@ domaine (lent, coûteux en RAM), donner au modèle unique actif des **skills
 réutilise l'architecture `01-skills/` déjà en place, sans coût de
 rechargement. Un vrai changement de modèle reste envisageable plus tard si
 le besoin de qualité par domaine dépasse ce qu'un bon skill peut faire.
+
+**Analyse complète (pourquoi ce choix, pas juste la conclusion)** :
+
+Un skill n'ajoute pas de connaissance au modèle — c'est une injection de
+prompt système (instructions, méthode, restrictions d'outils), pas un
+entraînement. Il peut façonner le **ton**, la **méthode**, le **format**
+("pense comme un comptable : vérifie ces points dans cet ordre, signale
+toute incertitude plutôt que d'arrondir"), mais ne peut pas compenser une
+vraie lacune de connaissances du modèle de base. Si le modèle actif connaît
+mal un domaine, aucun skill "persona" ne va lui injecter cette
+connaissance — un skill dirige un modèle déjà compétent, il n'en invente
+pas un.
+
+Donc la vraie question n'est pas "skill contre modèle" en général, mais
+spécifique à chaque expertise visée, et seulement vérifiable à l'usage :
+
+- **Code** : `qwen3-coder` est déjà le modèle par défaut de ce projet —
+  rien à changer.
+- **Comptable / juridique / langue** : si le modèle actuel répond déjà
+  correctement sur ces sujets dès qu'un bon skill cadre la méthode, un
+  skill suffit, point final. Si ses réponses manquent de justesse
+  factuelle sur un domaine précis malgré un skill bien écrit, c'est le
+  signal qu'un **vrai changement de modèle** serait justifié pour CE
+  sujet-là — vers `mistral-small3.2` ou un autre modèle déjà présent dans
+  `ollama list`, plus généraliste que `qwen3-coder`. Mais basculé **une
+  fois par session de travail**, pas en temps réel par message : c'est
+  très exactement ce que `04-scripts/basculer-modele.sh` permet déjà
+  aujourd'hui, sans aucun développement supplémentaire. La bascule
+  "automatique selon le sujet, message par message" demandée initialement
+  est la partie coûteuse en RAM/latence à éviter ; la bascule "une fois en
+  début de session selon le sujet du jour" est déjà résolue.
+- **Recherche internet** : besoin d'un accès web, pas seulement d'un autre
+  modèle — à traiter séparément. Rappel : l'outil de recherche web natif de
+  `dsh` a été désactivé (round 12, voir README) parce que câblé sur l'API
+  cloud DeepSeek, contraire au principe local de ce projet. Une recherche
+  web qui resterait locale/maîtrisée demanderait un autre mécanisme, pas
+  encore défini.
+
+**Prochaine étape concrète si cette piste est reprise** : tester les
+skills-personas sur chaque domaine avec le modèle actuel d'abord, et ne
+basculer vers un changement de modèle par session que si un vrai déficit
+de connaissance est observé en pratique — pas avant, et jamais
+automatiquement message par message. Le coût réel d'un déchargement/
+rechargement complet (~18 Go) n'a jamais été mesuré précisément dans ce
+projet (juste estimé "quelques dizaines de secondes" par analogie avec les
+temps de chargement déjà observés) — à chronométrer pour de vrai avant de
+trancher si cette piste devient active.
 
 ## 3. Accès à des sandbox Docker pour les propres tests de l'agent
 
