@@ -1227,12 +1227,34 @@ au round 7 (où l'artefact de fin de tour survenait APRÈS une tâche déjà
 réussie, donc cosmétique), ici le modèle annonce l'intention ("Je vais
 créer...") puis tente directement d'appeler `controle-qualite` — avec
 la bonne clé `name` cette fois, mais en syntaxe brute non exécutée — **sans
-jamais créer le fichier**. Même contexte, même modèle, exécuté dans le
-même passage que 3b qui a pleinement réussi : donc pas un problème de
-contexte résiduel, plutôt un aléa ponctuel sur cette tâche précise. Pas
-encore assez de passages répétés pour savoir si c'est systématique sur
-la consigne HTML5 ou un raté isolé — à observer sur les prochains
-passages plutôt qu'à corriger à l'aveugle.
+jamais créer le fichier**.
+
+**Correction après un 3e passage (même session, contexte toujours à
+32768, confirmé) : le correctif du round 15 n'explique pas tout.** Avec
+un contexte sain ET l'écriture autorisée sur deux passages consécutifs :
+- **3a (page HTML5) : 0 succès sur 3 tentatives réelles**, à chaque fois
+  avec un outil fabriqué différent, qui n'existe nulle part dans ce
+  dépôt (vérifié par recherche dans `01-skills/`/`03-workflows/`) :
+  `todo_write` (round 14, contexte dégradé), rien d'identifiable (round
+  15, contexte sain), puis `update_goal` avec un id de toute évidence
+  factice (`g-1234567890`) sur ce 3e passage, contexte toujours sain.
+- **3b (thème WordPress) : 1 succès sur 2 tentatives** une fois le
+  contexte corrigé — réussi au round 15, mais a échoué au 3e passage
+  (le modèle décrit son intention puis émet l'appel `bash` du `mkdir`
+  en texte brut au lieu de l'exécuter — aucun fichier créé, confirmé).
+
+**Conclusion révisée** : le contexte tronqué était une cause racine
+réelle et confirmée pour A.1/A.2/A.3 (fiable sur les 3 passages depuis
+le correctif), mais **pas** la seule cause de D.14 — cette syntaxe
+d'appel d'outil malformée en fin de tour reste un problème ouvert,
+reproductible même à contexte sain, pas encore expliqué. 3a échoue de
+façon stable (3/3) quelle que soit la cause déjà écartée (ni contexte,
+ni accès écriture) — un indice plus solide qu'un aléa isolé. **Prochaine
+étape utile, pas encore faite** : isoler uniquement la consigne 3a (pas
+toute la suite) avec `dsh --profile headless --json "<consigne HTML5
+exacte>"` pour voir la trace complète des `tool_call` qui précèdent
+l'artefact final, plutôt que de ne voir que le texte final déjà
+tronqué.
 
 ## 🖥️ Lancement simple et accès mobile
 
