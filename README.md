@@ -1378,6 +1378,39 @@ sont des ajouts récents au protocole de test, pas le bug lui-même —
 3a n'a probablement jamais été fiable, simplement personne ne l'avait
 encore vérifié d'assez près pour s'en apercevoir.
 
+### Round 18 — 3a réussit enfin pour de vrai ; `dsh` mis à jour ; contenu personnel ajouté
+
+**Premier succès complet et vérifié de 3a.** Un nouveau passage de
+`suite-tests-reelle.sh` (toujours `qwen3-coder`, contexte sain) montre
+3a réussir intégralement : fichier `test-html5.html` réellement créé,
+contrôle qualité exécuté, **et C.7 consigne 2 nouveaux verdicts** (contre
+1 lors du précédent succès partiel) — cette fois c'est 3b qui échoue
+avec le glitch `update_goal` déjà vu au round 15. **Ça corrige la
+lecture trop catégorique du round 17** ("3a : 0 succès sur 3
+tentatives") : sur l'ensemble des passages réels de cette session, les
+deux tâches ont chacune déjà réussi et déjà échoué au moins une fois —
+le bon résumé est "intermittent sur les deux", pas "3a cassé, 3b
+fiable" ni l'inverse. Pas encore assez de passages pour chiffrer un
+vrai taux de réussite.
+
+**`dsh` mis à jour, le terrain change à partir d'ici.** Tous les rounds
+1 à 17 ont tourné contre `0.1.7-rc.2`. À l'occasion de l'investigation
+sur la fluidité de l'interface web (texte/focus qui se comportait mal),
+`dsh` a été mis à jour vers `0.2.0-rc.2` puis `0.2.1-alpha.1` — cette
+dernière touche justement l'éditeur de prompt (texte multiligne,
+gestion clavier). **Tout round documenté à partir d'ici reflète cette
+nouvelle version**, pas celle des rounds précédents — à garder en tête
+si un comportement déjà caractérisé (le glitch de template, par
+exemple) semble changer : la version de `dsh` a changé en même temps.
+Pas encore confirmé si la fluidité de l'interface web s'est améliorée.
+
+**`06-data/personnalite/` et `06-data/sagesse/citations-sages/` ne sont
+plus vides.** Contenu personnel ajouté directement par l'utilisateur
+(cahiers, méthode, clés relationnelles, citations) — les deux
+emplacements que `skill-personnalite-et-sagesse.md` et
+`skill-persona-relations-humaines.md` attendaient vides jusqu'ici (voir
+`PISTES-EVOLUTION.md`, point 4). Contenu personnel, non détaillé ici.
+
 ## 🖥️ Lancement simple et accès mobile
 
 Trois scripts optionnels, ajoutés après coup pour un usage quotidien plus
