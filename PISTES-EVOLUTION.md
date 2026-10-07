@@ -133,6 +133,44 @@ pas de vrai parallélisme de traitement. Si un vrai conflit apparaît : un
 gabarit de conteneur par type de projet (un `Dockerfile` standard "Node", un
 autre "Python") serait l'étape suivante logique, pas un système plus large.
 
+## 6. Multimodal : lire PDF/images (vision), voix en entrée/sortie, génération d'images
+
+Quatre capacités distinctes, à ne pas traiter comme un seul bloc — chacune
+a ses propres contraintes matérielles sur cette machine.
+
+**Lire des PDF et des images (vision)** : état actuel pas clair — une piste
+existait déjà dans `install-plugins.sh` depuis la toute première version du
+projet (`@liustack/modlens`, "vision, routable vers Ollama en local"), mais
+jamais testée ni confirmée installée au fil des 13 rounds de validation
+réelle. Reste à vérifier : (1) si ModLens est effectivement installé et
+fonctionnel, (2) si l'un des modèles déjà présents dans `ollama list`
+(`qwen3-coder`, `mistral-small3.2`, `openchat`, `glm-4.7-flash`, `llama3`,
+`mistral`) a de vraies capacités vision — aucun n'est confirmé vision-capable
+ici, à vérifier plutôt qu'à supposer. Si aucun ne l'est, il faudrait tirer un
+modèle vision dédié (ex. famille Qwen2-VL), avec le même arbitrage RAM que
+le point 2 (un modèle de plus à charger, sur un budget déjà serré).
+
+**Voix en entrée (commandes vocales) et en sortie (réponse parlée)** : la
+piste la plus simple des quatre — ne touche pas au gros modèle de langage.
+Transcription locale légère en entrée (ex. `whisper.cpp`, quelques centaines
+de Mo, tourne bien sur Apple Silicon), voix de sortie via la commande `say`
+native de macOS ou un moteur TTS local plus naturel. S'ajoute en périphérie
+de `dsh` (transcription → texte envoyé en prompt, réponse texte → synthèse
+vocale), sans concurrencer le budget RAM/GPU déjà serré du LLM principal.
+
+**Génération d'images** : nécessite un modèle de diffusion (Stable
+Diffusion/SDXL/Flux ou équivalent), une famille de modèle complètement
+différente des LLM de texte. Même casse-tête RAM/GPU que le point 2 : les
+24 Go de ce Mac Mini ne permettent probablement pas de garder le LLM de
+chat ET un modèle de diffusion chargés simultanément — à utiliser en
+séquence (décharger l'un pour charger l'autre), pas en parallèle, sauf à
+vérifier qu'un modèle de diffusion suffisamment léger changerait ce calcul.
+
+**Reste à faire avant de construire quoi que ce soit** : vérifier l'état
+réel de ModLens, confirmer ou infirmer les capacités vision des modèles
+déjà présents, et tester un couple whisper.cpp/`say` en conditions réelles
+(c'est la piste la moins chère à valider des quatre).
+
 ---
 
 Aucune de ces pistes n'a de code associé pour l'instant — ce fichier existe
