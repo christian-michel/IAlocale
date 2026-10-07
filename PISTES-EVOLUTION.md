@@ -117,8 +117,42 @@ sont déjà indexés automatiquement par `04-scripts/watch-knowledge-base.js`
 **Reste à faire** :
 - Vérifier si `watch-knowledge-base.js` sait déjà extraire le texte d'un PDF,
   ou s'il faut ajouter une étape d'extraction avant indexation.
-- Décider du format pour les "clés" relationnelles personnelles (nouveau
-  skill dédié vs fichiers dans `06-data/sagesse/`) — pas encore tranché.
+
+**Mise à jour — tranché et construit** : le format pour les "clés"
+relationnelles est décidé. Les clés gouvernent un **comportement**
+(comment recevoir/décortiquer une information, quelle posture adopter) —
+elles vivent comme un **skill** (`01-skills/skill-cles-relationnelles.md`,
+vide pour l'instant, à remplir par l'utilisateur), pas comme une donnée
+passive dans `06-data/`. Raison : un skill est déjà dans le périmètre
+sûr d'`auto-implementer.js` (`modifier-skill`) — si l'agent juge un jour
+qu'une clé devrait être révisée, il peut le proposer via le mécanisme
+d'auto-implémentation existant, sans qu'il faille étendre son périmètre.
+Les **citations des sages**, à l'inverse, sont de la référence passive
+(pas un comportement à réviser) — elles vivent dans
+`06-data/sagesse/citations-sages/`, indexées automatiquement, sans
+mécanisme de révision.
+
+Un nouveau skill `01-skills/skill-persona-relations-humaines.md` encode
+l'ordre de priorité strict demandé : clés internes d'abord, citations de
+sagesse ensuite, élargissement par raisonnement général en tout dernier
+recours et seulement en renforcement — jamais en remplacement.
+
+**Également construit, dans la même discussion** : `01-skills/skill-
+raisonnement-scientifique.md` (jamais défini avant, rédigé sur des bases
+de méthode scientifique standard — distinction fait/hypothèse/opinion,
+falsifiabilité, quantification de l'incertitude) et `01-skills/skill-
+apprentissage-par-confirmation.md`, qui ferme une boucle demandée
+explicitement : demander confirmation après une réponse substantielle,
+et l'enregistrer via `04-scripts/memoire-cli.js` (déjà existant, aucun
+nouveau script) pour répondre plus vite et plus précisément la prochaine
+fois sur un sujet similaire.
+
+**Pas encore testé en conditions réelles** : la commande
+`memoire-cli.js set/search --type reponse-validee` a été vérifiée
+isolément (fonctionne comme documenté), mais jamais le comportement réel
+du skill en conversation — est-ce que l'agent demande la confirmation au
+bon moment, pas trop souvent, et retrouve bien une réponse validée la
+fois suivante ?
 
 ## 5. Docker par projet, pour isoler plusieurs projets de code en parallèle
 
