@@ -1249,12 +1249,58 @@ le correctif), mais **pas** la seule cause de D.14 — cette syntaxe
 d'appel d'outil malformée en fin de tour reste un problème ouvert,
 reproductible même à contexte sain, pas encore expliqué. 3a échoue de
 façon stable (3/3) quelle que soit la cause déjà écartée (ni contexte,
-ni accès écriture) — un indice plus solide qu'un aléa isolé. **Prochaine
-étape utile, pas encore faite** : isoler uniquement la consigne 3a (pas
-toute la suite) avec `dsh --profile headless --json "<consigne HTML5
-exacte>"` pour voir la trace complète des `tool_call` qui précèdent
-l'artefact final, plutôt que de ne voir que le texte final déjà
-tronqué.
+ni accès écriture) — un indice plus solide qu'un aléa isolé.
+
+### Round 16 — répétition minimale et isolée du glitch : hors contexte, hors mauvaise clé
+
+La consigne 3a (exactement celle de `suite-tests-reelle.sh`, mais
+sauvegardée hors du dépôt dans `/tmp` pour isoler complètement le test)
+relancée seule, sans rien d'autre autour :
+```
+dsh --profile headless --json "Cree une page HTML5 complete et valide avec un titre, un paragraphe de description et un bouton. Sauvegarde-la dans /tmp/isole-3a/test-html5.html. Avant de considerer la tache terminee, fais verifier le resultat par le controle qualite."
+```
+
+Toute la réponse (un seul événement `text`, 73 tokens de sortie) :
+```
+<function=skill><parameter=name>personnalite-et-sagesse</parameter></function></tool_call>
+<function=skill><parameter=name>consulter-sagesse-interne</parameter></function></tool_call>
+<function=skill><parameter=name>analyse-objectifs</parameter></function></tool_call>
+```
+
+Trois tentatives, chacune syntaxiquement correcte cette fois (bon
+paramètre `name`, contrairement à `skill_name` au round 15) —
+**et pourtant aucune des trois n'apparaît comme un vrai `tool_call`
+dans la trace JSON** : pas un seul `{"type":"tool_call",...}`, là où
+les traces précédentes montraient au moins des tentatives réellement
+dispatchées (même avec la mauvaise clé). Le tour se termine
+(`turn_end`, `reason: completed`) sans jamais toucher à la vraie tâche
+— pas de fichier créé, rien.
+
+**Ça écarte les deux hypothèses précédentes comme explication
+complète** : contexte sain (32768, confirmé par le round précédent),
+syntaxe correcte, et le glitch persiste quand même, sous sa forme la
+plus épurée observée jusqu'ici. **Nouvelle hypothèse, pas encore
+confirmée** : `dsh` ne reconnaîtrait fiablement qu'un seul appel
+d'outil par tour — quand le modèle en enchaîne plusieurs d'affilée dans
+une même réponse avant de rendre la main (ici 3 d'un coup), le parseur
+de template ne les détecte plus du tout, et tout retombe en texte brut
+plutôt qu'en appels exécutés. Les trois skills tentés
+(`personnalite-et-sagesse`, `consulter-sagesse-interne`,
+`analyse-objectifs`) ne sont pas absurdes comme réaction à la consigne
+— `analyse-objectifs` est même une vraie bonne première étape d'après
+sa propre description — donc l'intention du modèle est plausible ;
+c'est l'exécution côté `dsh` qui casse.
+
+**Reste à faire pour confirmer ou infirmer cette hypothèse** : relancer
+exactement la même consigne isolée contre un modèle d'une autre famille
+déjà présent dans `ollama list` (ex. `mistral-small3.2`, pas de la
+famille Qwen3) via `./04-scripts/setup-local-model.sh
+mistral-small3.2:latest` puis le même appel `--json`. Si le glitch
+disparaît avec un autre modèle, c'est spécifique à la façon dont
+`qwen3-coder` formate ses appels d'outils multiples. S'il persiste,
+c'est bien `dsh` lui-même qui ne gère pas plusieurs appels d'outils en
+une seule réponse, quel que soit le modèle — pas encore testé, à faire
+avant de conclure.
 
 ## 🖥️ Lancement simple et accès mobile
 
