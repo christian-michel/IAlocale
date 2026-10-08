@@ -47,19 +47,16 @@
  * 0.9-0.95, JSON conforme au schéma à chaque fois. La validation post-hoc
  * (validerDecision) reste utile en continu — un résultat conforme une
  * fois n'empêche pas une dérive plus tard — mais ce n'est plus la seule
- * garantie. Moteur "laya" toujours non exécuté, pour une raison précise
- * et vérifiée (pas juste "pas essayé") :
- * `npm install` échoue ici car la dépendance `onnxruntime-node` télécharge
- * son binaire natif depuis le flux Nuget (api.nuget.org) au moment de
- * l'installation — pas depuis npm — et ce host est bloqué par le proxy
- * réseau de mon environnement (confirmé dans son propre journal
- * d'échecs). Rien n'indique que ce sera aussi le cas sur un réseau
- * domestique normal, mais si `npm install` échoue avec une erreur réseau
- * sur `onnxruntime-node`, vérifie que api.nuget.org est bien joignable
- * avant de chercher ailleurs. L'API utilisée (Laya.load / systemOne /
- * types noul·choice) vient de la documentation du projet
- * (github.com/receptron/laya), vérifiée textuellement à deux reprises
- * mais jamais exécutée.
+ * garantie. ✅ Moteur "laya" confirmé lui aussi sur machine réelle (choisi
+ * automatiquement via --domaine sur un sujet non technique) :
+ * confiance 0.83, fiable: true. Premier chargement à froid mesuré :
+ * ~362s (detail_timing.chargement_ms) — nettement plus que les quelques
+ * secondes attendues pour ~2 Go, à garder en tête avant un usage
+ * sensible au temps de réponse. `npm install` avait échoué dans mon
+ * propre bac à sable de développement (`onnxruntime-node` télécharge
+ * son binaire natif depuis le flux Nuget, api.nuget.org, bloqué par mon
+ * proxy réseau) — confirmé sans rapport avec un réseau domestique
+ * normal.
  *
  * Usage :
  *   node decision-rapide.js --question "..." --type oui-non|choix|note

@@ -1460,7 +1460,45 @@ bug, `headless` répond à **une seule** tâche puis s'arrête (voir son
 conversation continue. Pour un vrai aller-retour avec ce skill, utiliser
 `dsh --profile web` ou `dsh --profile tui` à la place.
 
-## 🖥️ Lancement simple et accès mobile
+### Round 20 — premier succès réel du moteur Laya, et sélection automatique du moteur
+
+**Laya a tourné pour de vrai pour la première fois.** `npm install`
+avait échoué dans mon bac à sable (`onnxruntime-node` bloqué par mon
+proxy réseau) — sur le Mac Mini, `npm install` a réussi (un seul script
+d'installation bloqué par npm, `onnxruntime-node@1.30.0` postinstall,
+sans conséquence constatée). Ajouté dans le même round : une sélection
+automatique du moteur (`--domaine` dans `decision-rapide.js`) — `ollama`
+pour `--type note` ou un domaine reconnu comme du code/de la
+programmation, `laya` pour tout le reste (relationnel, juridique,
+comptable, général). Branché dans l'unique appel automatique réel du
+dépôt (`identifier-meilleur`, qui transmet désormais `--domaine
+"{{demande}}"`).
+
+Premier test réel : `--domaine "positionnement relationnel"` →
+sélection automatique de `laya` confirmée dans les logs, puis décision
+réellement rendue :
+```json
+{
+  "decision": false, "confiance": 0.8314, "fiable": true,
+  "moteur": "laya", "duree_ms": 362658,
+  "detail_timing": { "chargement_ms": 362351, "decision_ms": 307 }
+}
+```
+Chargement à froid mesuré : **~362 secondes** — bien plus que les
+quelques secondes qu'on pourrait attendre pour ~2 Go de modèle,
+confirmé pour la première fois avec un vrai chiffre plutôt qu'une
+estimation. Décision elle-même quasi instantanée (307 ms) une fois le
+modèle chargé. Confiance 0.83, cohérente et exploitable.
+
+**Incident sans gravité au passage** : un gros bloc de texte (sortie
+`git pull` déjà affichée) s'est retrouvé réinjecté dans le terminal et
+interprété ligne par ligne comme des commandes — plusieurs scripts de
+ce dépôt (`auto-implementer.js`, `boucle-hook-stop.js`,
+`consigner-verdict-qualite.js`) exécutés sans arguments par accident.
+Les trois ont fait exactement ce qu'ils doivent faire dans ce cas :
+afficher leur message d'usage et s'arrêter, sans rien modifier. Aucune
+perte de données — un incident de terminal (copier-coller dupliqué),
+pas un bug du projet.
 
 Trois scripts optionnels, ajoutés après coup pour un usage quotidien plus
 confortable — aucun n'est requis par le reste du projet.

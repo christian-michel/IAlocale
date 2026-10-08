@@ -149,15 +149,19 @@ précis plutôt qu'une bascule générale.
 
 ## Limites du moteur `laya`
 
-- **Non exécuté dans mon environnement** — pas faute d'avoir essayé :
-  `npm install` y échoue précisément parce que la dépendance
-  `onnxruntime-node` télécharge son binaire natif depuis le flux Nuget
-  (`api.nuget.org`) au moment de l'installation, pas depuis npm, et ce
-  host est bloqué par le proxy réseau de mon bac à sable (confirmé dans
-  son propre journal d'échecs). Rien n'indique que ce sera le cas sur un
-  réseau domestique normal — mais si `npm install` échoue avec une erreur
-  réseau sur `onnxruntime-node` chez toi aussi, vérifie `api.nuget.org`
-  avant de chercher ailleurs.
+- ✅ **Confirmé en conditions réelles** (Mac Mini M4, voir
+  `documentation/historique-du-projet.md`) : `npm install` réussit,
+  `--moteur laya` (choisi automatiquement via `--domaine` sur un sujet
+  non technique) a rendu une vraie décision — `confiance: 0.83`,
+  `fiable: true`. Premier chargement à froid mesuré : **~362 secondes**
+  (`chargement_ms` dans `detail_timing`), nettement plus que les
+  quelques secondes qu'on pourrait attendre pour ~2 Go — à garder en
+  tête avant de l'utiliser dans un contexte sensible au temps de
+  réponse (voir "Pas de serveur persistant" plus bas). `npm install`
+  avait échoué dans mon propre bac à sable de développement
+  (`onnxruntime-node` télécharge son binaire natif depuis
+  `api.nuget.org`, bloqué par mon proxy réseau) — confirmé sans rapport
+  avec un réseau domestique normal.
 - **Type `note` non supporté** : le type `score` de Laya ne documente pas
   de mesure de confiance (contrairement à `choice` et son champ
   `probabilities`) — plutôt que d'inventer une valeur, ce type est refusé
@@ -168,9 +172,11 @@ précis plutôt qu'une bascule générale.
   fier pour du contenu en français.
 - **Pas de serveur persistant** : contrairement à Ollama (démon qui garde
   le modèle chargé), chaque appel à `--moteur laya` recharge le modèle
-  depuis son cache (~2 Go lus). `detail_timing` dans la sortie JSON
-  sépare `chargement_ms` de `decision_ms` pour que ce coût reste visible
-  plutôt que caché dans un `duree_ms` global trompeur.
+  depuis son cache. `detail_timing` dans la sortie JSON sépare
+  `chargement_ms` de `decision_ms` pour que ce coût reste visible plutôt
+  que caché dans un `duree_ms` global trompeur — confirmé utile en
+  pratique : sur le premier appel réel, 362351 ms de chargement contre
+  307 ms de décision proprement dite.
 
 ## Vers une amélioration de Laya par l'usage
 
