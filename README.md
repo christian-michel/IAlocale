@@ -1561,7 +1561,7 @@ dsh-harness/
 ├── PISTES-EVOLUTION.md       # idées discutées mais pas encore commencées — état réel + recommandation pour chacune
 ├── start.sh                  # point d'entrée interactif (dsh --profile web + watcher)
 │
-├── 01-skills/                 # 25 skills — voir leur description en tête de fichier pour le déclenchement
+├── 01-skills/                 # 27 skills — voir leur description en tête de fichier pour le déclenchement
 │   ├── skill-controleur-qualite.md / skill-controleur-de-controle.md   # double contrôle d'une réponse
 │   ├── skill-decision-rapide.md / skill-ameliorateur.md / skill-ameliorateur-systeme.md
 │   ├── skill-auto-implementation.md                                    # documente auto-implementer.js
@@ -1573,6 +1573,8 @@ dsh-harness/
 │   ├── skill-apprentissage-par-confirmation.md                         # apprend des succès confirmés par l'utilisateur
 │   ├── skill-comparateur-scenarios.md                                  # A/B sur une tâche récurrente, garde le gagnant
 │   ├── skill-clarifier-la-demande.md                                   # questions par vagues AVANT de commencer, sur demande explicite
+│   ├── skill-methode-raisonnement.md                                   # décomposer/relire par ordre fixe, s'améliore par essai-erreur (lecon-methode)
+│   ├── skill-journal-interne.md                                       # journal d'aisance/friction exprimé par le modèle (journal-interne) — honnête sur sa nature
 │   ├── skill-testeur-docker.md / skill-evaluateur.md / skill-analyse-objectifs.md
 │   ├── skill-boucles-agentiques.md / skill-detection-erreurs-silencieuses.md
 │   └── skill-extracteur-tests.md / skill-synthese-finale.md / skill-verifier-et-croiser.md
