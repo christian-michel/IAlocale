@@ -7,9 +7,16 @@
  * une question FERMÉE (oui/non, choix dans une liste, note chiffrée), pas
  * besoin de faire générer une réponse complète par un modèle.
  *
- * Deux moteurs, choisis avec --moteur :
+ * Deux moteurs. --moteur force explicitement l'un des deux ; sans lui,
+ * --domaine pilote un choix automatique (voir choisirMoteurParDefaut) :
+ * --type note ou --domaine absent → ollama (comportement historique,
+ * rien n'est deviné) ; --domaine reconnu comme du code/de la
+ * programmation → ollama (qualité de Laya non vérifiée sur un jugement
+ * technique) ; tout autre domaine déclaré (relationnel, juridique,
+ * comptable, général...) → laya, pour épargner la RAM/le temps du gros
+ * modèle sur une décision fermée qui n'en a pas besoin.
  *
- *   - "ollama" (défaut) : appel contraint au gros modèle déjà configuré
+ *   - "ollama" : appel contraint au gros modèle déjà configuré
  *     (sortie forcée par JSON Schema via `/api/chat`, température 0).
  *     N'ajoute aucune dépendance, mais sollicite le même modèle qui sert
  *     aussi à générer — voir documentation/historique-du-projet.md, section "Décision rapide".
@@ -56,12 +63,16 @@
  *
  * Usage :
  *   node decision-rapide.js --question "..." --type oui-non|choix|note
- *                            [--moteur ollama|laya]
+ *                            [--moteur ollama|laya] [--domaine "..."]
  *                            [--contexte "..."] [--choix "a,b,c"]
  *                            [--echelle "0,10"] [--avec-justification]
  *                            [--seuil-confiance 0.6] [--modele <id>]
  *                            [--base-url http://127.0.0.1:11434]
  *                            [--multilingue] [--composant decision-rapide]
+ *
+ * --domaine : texte libre décrivant le sujet (ex. "code", "juridique",
+ * "relationnel") — ignoré si --moteur est déjà précisé explicitement,
+ * sinon pilote le choix automatique décrit plus haut.
  *
  * Sortie (dernière ligne de stdout) :
  *   { "decision": ..., "confiance": 0-1, "fiable": bool, "moteur": "...",
@@ -258,18 +269,58 @@ async function decisionViaOllama({ args, composant, type, choix, echelleMin, ech
   return { decisionBrute, dureeMs, modele };
 }
 
+// --- Sélection automatique du moteur (si --moteur n'est pas précisé) -------
+//
+// Heuristique simple et déterministe sur --domaine, pas un jugement du
+// modèle — une liste de mots, pas une analyse sémantique, pour rester
+// auditable. Le moteur retenu reste toujours visible dans "moteur" en
+// sortie, qu'il ait été choisi automatiquement ou explicitement.
+const MOTS_DOMAINE_CODE = [
+  'code', 'coder', 'codage', 'programmation', 'programmer',
+  'informatique', 'script', 'bug', 'débogu', 'debogu', 'compil', 'syntaxe',
+  'algorithme', 'développeur', 'developpeur', 'logiciel', 'refactor',
+  'javascript', 'typescript', 'python', 'bash', 'sql', 'java', 'php',
+  'html', 'css', 'node.js', 'npm', 'git', 'api',
+];
+
+function estDomaineCode(domaine) {
+  if (typeof domaine !== 'string' || !domaine.trim()) return false;
+  const texte = domaine.toLowerCase();
+  return MOTS_DOMAINE_CODE.some(mot => texte.includes(mot));
+}
+
+/** --type note : jamais Laya par défaut (pas de mesure de confiance
+ * fiable pour son type "score", voir l'en-tête du fichier) — seul un
+ * --moteur explicite pourrait forcer laya sur ce type, et échouerait
+ * alors proprement (voir moteur-laya.js). Pas de --domaine fourni : ne
+ * devine rien, conserve le comportement historique (ollama). Domaine
+ * identifié comme du code/de la programmation : ollama, parce que la
+ * qualité de Laya sur un jugement technique n'est pas vérifiée. Tout le
+ * reste (relationnel, juridique, comptable, général...) : laya, pour
+ * épargner la RAM/le temps du gros modèle sur une décision fermée. */
+function choisirMoteurParDefaut({ type, domaine }) {
+  if (type === 'note') return 'ollama';
+  if (!domaine) return 'ollama';
+  if (estDomaineCode(domaine)) return 'ollama';
+  return 'laya';
+}
+
 // --- Orchestration ----------------------------------------------------------
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const composant = typeof args.composant === 'string' ? args.composant : COMPOSANT_DEFAUT;
-  const moteur = typeof args.moteur === 'string' ? args.moteur : 'ollama';
+  const moteurExplicite = typeof args.moteur === 'string' ? args.moteur : null;
 
-  if (!args.question || args.question === true || !TYPES_VALIDES.includes(args.type) || !MOTEURS_VALIDES.includes(moteur)) {
-    console.error(`Usage : --question "..." --type ${TYPES_VALIDES.join('|')} [--moteur ${MOTEURS_VALIDES.join('|')}] [--contexte "..."] [--choix "a,b,c"] [--echelle "0,10"] [--avec-justification] [--seuil-confiance 0.6] [--modele <id>] [--base-url http://127.0.0.1:11434] [--multilingue]`);
+  if (!args.question || args.question === true || !TYPES_VALIDES.includes(args.type) || (moteurExplicite !== null && !MOTEURS_VALIDES.includes(moteurExplicite))) {
+    console.error(`Usage : --question "..." --type ${TYPES_VALIDES.join('|')} [--moteur ${MOTEURS_VALIDES.join('|')}] [--domaine "..."] [--contexte "..."] [--choix "a,b,c"] [--echelle "0,10"] [--avec-justification] [--seuil-confiance 0.6] [--modele <id>] [--base-url http://127.0.0.1:11434] [--multilingue]`);
     process.exit(1);
   }
   const type = args.type;
+  const moteur = moteurExplicite ?? choisirMoteurParDefaut({ type, domaine: args.domaine });
+  if (moteurExplicite === null) {
+    logInfo(composant, `Moteur choisi automatiquement : ${moteur} (domaine=${typeof args.domaine === 'string' ? args.domaine : 'non précisé'}, type=${type})`);
+  }
   const choix = type === 'choix' ? String(args.choix || '').split(',').map(s => s.trim()).filter(Boolean) : [];
   if (type === 'choix' && choix.length < 2) {
     console.error('Usage : --type choix requiert --choix "a,b,c" (au moins deux options)');

@@ -10,9 +10,9 @@ description: "À consulter avant de faire appel à un skill délibératif pour u
 besoin de faire générer une réponse complète par l'agent. JEV lui-même
 est un service cloud payant, non local (voir documentation/historique-du-projet.md, section
 "Auto-itération") ; ce script en reproduit le principe entièrement en
-local, sans rien payer — avec deux moteurs au choix (`--moteur`) :
+local, sans rien payer — avec deux moteurs :
 
-- **`ollama`** (défaut) : appel direct et contraint au gros modèle déjà
+- **`ollama`** : appel direct et contraint au gros modèle déjà
   configuré (`/api/chat`, sortie forcée par JSON Schema). N'ajoute aucune
   dépendance.
 - **`laya`** : [Laya](https://github.com/receptron/laya) (Convai
@@ -22,6 +22,13 @@ local, sans rien payer — avec deux moteurs au choix (`--moteur`) :
   dépendance npm de ce dépôt, volontairement optionnelle — voir
   `package.json`). Supporte `oui-non` et `choix` seulement : le type
   `note` est refusé avec ce moteur (voir "Limites" plus bas).
+
+**Lequel des deux s'applique n'est plus toujours un choix manuel.**
+Passe `--moteur ollama|laya` pour forcer l'un des deux explicitement
+(prioritaire dans tous les cas). Sans `--moteur`, passe `--domaine
+"<sujet>"` (texte libre : "code", "juridique", "relationnel"...) pour
+laisser `decision-rapide.js` choisir tout seul — voir la section dédiée
+plus bas pour la règle exacte.
 
 ## Quand l'utiliser, quand ne PAS l'utiliser
 
@@ -56,10 +63,40 @@ l'appelant va réellement lire la justification).
 Le modèle utilisé (moteur `ollama`) est celui déclaré dans
 `~/.dsh/settings.yaml` (`agent-default-model`, donc celui que
 `basculer-modele.sh` a configuré en dernier) sauf si `--modele` est passé
-explicitement. Pour le moteur `laya`, ajoute `--moteur laya` ; `--multilingue`
+explicitement. Pour forcer le moteur `laya` sans passer par la sélection
+automatique, ajoute `--moteur laya` ; `--multilingue`
 bascule sur le checkpoint multilingue de Laya plutôt que l'anglophone par
 défaut (voir "Limites" — la qualité en français n'est vérifiée dans
 aucun des deux cas).
+
+## Sélection automatique du moteur (`--domaine`)
+
+Sans `--moteur` explicite, le script choisit lui-même — règle
+déterministe, pas un jugement du modèle, toujours visible dans `moteur`
+en sortie :
+
+1. **`--type note`** → toujours `ollama` (Laya ne mesure pas de
+   confiance fiable pour son type `score`, voir "Limites").
+2. **`--domaine` absent** → toujours `ollama` (comportement historique,
+   rien n'est deviné sans indication).
+3. **`--domaine` reconnu comme du code/de la programmation** (mots-clés :
+   code, script, bug, algorithme, noms de langages...) → `ollama` — la
+   qualité de Laya sur un jugement technique n'est pas vérifiée,
+   mieux vaut le gros modèle déjà calibré pour ça.
+4. **Tout autre `--domaine` déclaré** (relationnel, juridique,
+   comptable, général...) → `laya`, pour épargner la RAM et le temps du
+   gros modèle sur une décision fermée qui n'a pas besoin de lui.
+
+```bash
+# Domaine non technique → laya automatiquement
+node 04-scripts/decision-rapide.js --question "..." --type oui-non --domaine "positionnement relationnel"
+
+# Domaine reconnu comme du code → ollama automatiquement
+node 04-scripts/decision-rapide.js --question "..." --type choix --choix "a,b" --domaine "revue de code Python"
+```
+
+`--domaine` est ignoré si `--moteur` est déjà fourni — l'automatisme ne
+prend jamais le dessus sur un choix explicite.
 
 ## Lire le résultat (dernière ligne de stdout, JSON)
 
@@ -84,9 +121,12 @@ aucun des deux cas).
 
 Branché dans `identifier-meilleur`
 (`03-workflows/systeme-auto-ameliorant-avec-controle.workflow.json`,
-v1.3.0) : choisir le meilleur résultat parmi N expériences évaluées est
+v1.5.0) : choisir le meilleur résultat parmi N expériences évaluées est
 un choix fermé, candidat naturel. L'étape tente d'abord
-`decision-rapide.js --type choix` ; si `fiable: false` (confiance sous
+`decision-rapide.js --type choix`, en transmettant `--domaine
+"{{demande}}"` (la demande d'origine telle quelle) pour laisser la
+sélection automatique du moteur s'appliquer — pas de `--moteur` ajouté
+ici volontairement ; si `fiable: false` (confiance sous
 `--seuil-confiance 0.75`) ou en cas d'échec, elle retombe sur la
 comparaison délibérative habituelle — la logique de repli vit dans les
 instructions de l'étape elle-même (pas dans une syntaxe conditionnelle du
