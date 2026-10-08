@@ -2,7 +2,7 @@
 /**
  * decision-rapide.js — mécanisme de décision rapide inspiré de JEV
  * (TypeSafe AI, "System One Model" : https://simonwillison.net/2026/Sep/21/jev/).
- * JEV lui-même est un service cloud payant (non local, voir README section
+ * JEV lui-même est un service cloud payant (non local, voir documentation/historique-du-projet.md section
  * "Auto-itération"), mais son idée se reproduit entièrement en local : pour
  * une question FERMÉE (oui/non, choix dans une liste, note chiffrée), pas
  * besoin de faire générer une réponse complète par un modèle.
@@ -12,7 +12,7 @@
  *   - "ollama" (défaut) : appel contraint au gros modèle déjà configuré
  *     (sortie forcée par JSON Schema via `/api/chat`, température 0).
  *     N'ajoute aucune dépendance, mais sollicite le même modèle qui sert
- *     aussi à générer — voir README, section "Décision rapide".
+ *     aussi à générer — voir documentation/historique-du-projet.md, section "Décision rapide".
  *
  *   - "laya" : Laya (Convai Innovations, Apache 2.0), un encodeur dédié de
  *     421M de paramètres (~2 Go de RAM), gratuit et local, qui tourne à
@@ -31,11 +31,11 @@
  *     @receptron/laya ni son API directement.
  *
  * Dans les deux cas : appel direct, PAS par `dsh` — évite le coût caché
- * du catalogue d'outils de l'agent (voir README, "Optimisation Mac Mini
+ * du catalogue d'outils de l'agent (voir documentation/historique-du-projet.md, "Optimisation Mac Mini
  * M4", ~14 700 tokens de schémas d'outils pour une tâche triviale).
  *
  * ✅ Moteur "ollama" confirmé contre un vrai Ollama sur machine réelle
- * (Mac Mini M4, `suite-tests-reelle.sh` round 14, voir README) : 3
+ * (Mac Mini M4, `suite-tests-reelle.sh` round 14, voir documentation/historique-du-projet.md) : 3
  * décisions réelles (code/juridique/comptable), ~1-2s chacune, confiance
  * 0.9-0.95, JSON conforme au schéma à chaque fois. La validation post-hoc
  * (validerDecision) reste utile en continu — un résultat conforme une

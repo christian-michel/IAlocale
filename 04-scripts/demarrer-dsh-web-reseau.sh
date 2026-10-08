@@ -1,6 +1,6 @@
 #!/bin/bash
 # demarrer-dsh-web-reseau.sh — lance dsh --profile web sur un port fixe,
-# en vue d'un accès depuis un mobile via tunnel SSH (voir README,
+# en vue d'un accès depuis un mobile via tunnel SSH (voir documentation/historique-du-projet.md,
 # "Accès depuis le mobile" — PAS une exposition directe sur le réseau
 # local : testé en conditions réelles, dsh 0.1.7-rc.2 refuse tout --host
 # autre que 127.0.0.1 ou 0.0.0.0, et bloque 0.0.0.0 à l'exécution avec

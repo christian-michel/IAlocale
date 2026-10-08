@@ -5,7 +5,7 @@
 #
 # Pourquoi ce script existe : par défaut, dsh ne voit QUE ses propres
 # skills internes (préréglage "cordis", noms numériques type
-# skill_30103000534672...) — confirmé en pratique (voir README,
+# skill_30103000534672...) — confirmé en pratique (voir documentation/historique-du-projet.md,
 # "Validation sur machine réelle", round 6 : `dsh --profile headless
 # "Liste les skills..."` ne renvoyait que ces ID internes). Rien ne pointe
 # automatiquement vers 01-skills/ de ce dépôt tant qu'on ne le déclare pas
@@ -21,7 +21,7 @@
 # "Download ZIP" déjà documenté dans auto-implementer.js).
 #
 # REMPLACE la liste plutôt que d'y ajouter (bug trouvé en pratique, round
-# 9 — voir README) : après un reclonage dans un nouveau dossier, l'ancien
+# 9 — voir documentation/historique-du-projet.md) : après un reclonage dans un nouveau dossier, l'ancien
 # chemin restait dans customSkillDirs à côté du nouveau, et dsh servait le
 # contenu de skill-controleur-qualite.md de l'ANCIEN dossier (périmé,
 # sans les correctifs du round 8) — les deux dossiers déclarant un skill

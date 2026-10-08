@@ -4,7 +4,7 @@
  * déterministe décide si l'agent a le droit de s'arrêter, pas l'agent
  * lui-même.
  *
- * dsh n'a pas (à notre connaissance — jamais confirmé, voir README section
+ * dsh n'a pas (à notre connaissance — jamais confirmé, voir documentation/historique-du-projet.md section
  * "Non vérifiable") de mécanisme de hooks natif comme Claude Code. Ce
  * script reproduit l'effet depuis l'extérieur : il relance une commande de
  * "travail" tant qu'une commande de "vérification" séparée échoue, et

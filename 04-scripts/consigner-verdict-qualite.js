@@ -3,7 +3,7 @@
  * consigner-verdict-qualite.js — étape finale OBLIGATOIRE de
  * skill-controleur-qualite.md et skill-controleur-de-controle.md.
  *
- * Pourquoi ce script existe : en conditions réelles (voir README,
+ * Pourquoi ce script existe : en conditions réelles (voir documentation/historique-du-projet.md,
  * "Validation sur machine réelle", round 7), le skill `controle-qualite`
  * était bien chargé par `dsh`, mais son "Format de Sortie" (un objet JSON
  * dans la réponse finale) n'était jamais réellement produit — le modèle

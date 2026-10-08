@@ -20,7 +20,7 @@ if command -v ollama >/dev/null 2>&1; then
     if curl -s -o /dev/null -w "" http://127.0.0.1:11434/api/tags 2>/dev/null; then
         echo "✅ Ollama répond sur le port 11434."
     else
-        echo "⚠️  Ollama installé mais ne répond pas — lance 'brew services start ollama' si c'est installé comme formule brew, sinon ouvre l'app Ollama.app (voir README, 'Validation sur machine réelle')."
+        echo "⚠️  Ollama installé mais ne répond pas — lance 'brew services start ollama' si c'est installé comme formule brew, sinon ouvre l'app Ollama.app (voir documentation/historique-du-projet.md, 'Validation sur machine réelle')."
     fi
 else
     echo "⚠️  Ollama n'est pas installé."

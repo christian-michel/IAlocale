@@ -40,7 +40,7 @@ fi
 echo "🦙 Configuration du modèle local : $MODEL"
 
 # Redémarre le vrai serveur Ollama en cours d'exécution, quel que soit son
-# mode d'installation — trouvé en pratique (voir README, "Validation sur
+# mode d'installation — trouvé en pratique (voir documentation/historique-du-projet.md, "Validation sur
 # machine réelle", round 5) : `brew services restart ollama` est un no-op
 # SILENCIEUX si Ollama tourne via l'app officielle (Ollama.app) plutôt que
 # comme formule brew (cas confirmé sur un Mac Mini réel : `ollama` présent
@@ -87,14 +87,14 @@ if [ "$(uname)" = "Darwin" ]; then
     echo "🎮 Limite mémoire GPU (iogpu.wired_limit_mb) actuelle : ${LIMITE_ACTUELLE} Mo (0 = automatique, ~75% de la RAM totale)."
     echo "   Relèvement à ${LIMITE_GPU_MO} Mo (RAM totale ${RAM_TOTALE_MO} Mo - 2 Go de marge)..."
     if sudo sysctl iogpu.wired_limit_mb="$LIMITE_GPU_MO"; then
-        echo "   ⚠️  Ce réglage ne survit PAS à un redémarrage de la machine — à refaire après chaque reboot (relance ce script, ou voir README pour le rendre permanent via un LaunchDaemon)."
+        echo "   ⚠️  Ce réglage ne survit PAS à un redémarrage de la machine — à refaire après chaque reboot (relance ce script, ou voir documentation/historique-du-projet.md pour le rendre permanent via un LaunchDaemon)."
     else
-        echo "   ⚠️  Échec du relèvement (sudo requis, ou 'iogpu.wired_limit_mb' absent sur cette version de macOS) — si des plantages 'Insufficient Memory' apparaissent plus tard, voir README."
+        echo "   ⚠️  Échec du relèvement (sudo requis, ou 'iogpu.wired_limit_mb' absent sur cette version de macOS) — si des plantages 'Insufficient Memory' apparaissent plus tard, voir documentation/historique-du-projet.md."
     fi
 fi
 
 # 2) Contexte : Ollama choisit sa fenêtre de contexte par défaut selon un
-#    palier mémoire qu'on ne veut pas laisser au hasard (voir README,
+#    palier mémoire qu'on ne veut pas laisser au hasard (voir documentation/historique-du-projet.md,
 #    section "Piège du contexte"). On le fixe explicitement, puis on
 #    redémarre le VRAI serveur (fonction ci-dessus) pour que ça s'applique
 #    réellement — un simple `export`/`launchctl setenv` ne touche jamais un

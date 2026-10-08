@@ -2,7 +2,7 @@
   "name": "dsh-harness",
   "private": true,
   "type": "module",
-  "description": "Le coeur de ce projet ne depend d'aucun paquet npm (voir README, 'pas de package.json' est delibere). Seul le moteur optionnel laya, isole dans 04-scripts/moteur-laya.js et utilise par decision-rapide.js (--moteur laya), en a besoin — lance 'npm install' uniquement si tu veux l'utiliser. 'type: module' est obligatoire ici : sans lui, Node retombe en CommonJS par defaut des qu'un package.json existe, et tous les scripts ESM existants (import/export) se remettraient a reparser a chaque lancement (verifie empiriquement avant d'ajouter ce fichier).",
+  "description": "Le coeur de ce projet ne depend d'aucun paquet npm (voir documentation/historique-du-projet.md, 'pas de package.json' est delibere). Seul le moteur optionnel laya, isole dans 04-scripts/moteur-laya.js et utilise par decision-rapide.js (--moteur laya), en a besoin — lance 'npm install' uniquement si tu veux l'utiliser. 'type: module' est obligatoire ici : sans lui, Node retombe en CommonJS par defaut des qu'un package.json existe, et tous les scripts ESM existants (import/export) se remettraient a reparser a chaque lancement (verifie empiriquement avant d'ajouter ce fichier).",
   "dependencies": {
     "@receptron/laya": "0.1.2"
   }

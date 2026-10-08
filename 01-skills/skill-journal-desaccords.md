@@ -75,7 +75,7 @@ v1.4.0) : consigne systématiquement tout résultat `fiable: false` de
 `decision-rapide.js`, puis complète avec le résultat délibératif une
 fois connu. Comme pour le reste de ce workflow, l'orchestration réelle
 par `dsh-workflow` n'a pas pu être vérifiée dans mon environnement (voir
-README, section "Non vérifiable") — seul `journal-desaccords.js`
+documentation/historique-du-projet.md, section "Non vérifiable") — seul `journal-desaccords.js`
 lui-même a été testé directement (enregistrement des trois résolutions,
 résumé, export, résilience à une ligne corrompue).
 

@@ -18,7 +18,7 @@ Les faits sont-ils sourcés ? Y a-t-il des contradictions ?
 ### 3. Preuve fraîche obligatoire — jamais de verdict sur une simple affirmation
 Si la tâche affirme avoir produit un artefact (fichier créé ou modifié, service relancé, valeur changée quelque part), **vérifie-le toi-même avant de juger** — ne te fie jamais au texte qui décrit l'action comme preuve que l'action a eu lieu. Concrètement : si la réponse dit "le fichier X a été créé", exécute une vérification directe sur ce fichier précis (`cat`/`ls`/équivalent via l'outil bash) avant de continuer. Si l'artefact annoncé n'existe pas, ou ne correspond pas à ce qui est décrit, le statut ne peut pas être `VALIDE` — au mieux `A_VERIFIER`, le plus souvent `INVALIDE`.
 
-Cette étape existe parce qu'elle a été prise en défaut en conditions réelles (voir `README.md`, "Validation sur machine réelle", rounds 14-17) : un modèle peut affirmer avec assurance qu'un fichier a été créé et validé, alors qu'aucun fichier n'existait réellement sur le disque. Une affirmation de succès, aussi détaillée et confiante soit-elle, n'est jamais une preuve — seule une vérification indépendante en est une.
+Cette étape existe parce qu'elle a été prise en défaut en conditions réelles (voir `documentation/historique-du-projet.md`, "Validation sur machine réelle", rounds 14-17) : un modèle peut affirmer avec assurance qu'un fichier a été créé et validé, alors qu'aucun fichier n'existait réellement sur le disque. Une affirmation de succès, aussi détaillée et confiante soit-elle, n'est jamais une preuve — seule une vérification indépendante en est une.
 
 ### 4. Test Pratique (si le résultat contient du code)
 Utilise le skill `testeur-docker` pour exécuter le code dans un environnement isolé plutôt que de juger "à l'œil".
@@ -39,7 +39,7 @@ node 04-scripts/consigner-verdict-qualite.js --composant controleur-qualite --st
 Ce n'est pas optionnel, et ce n'est pas remplaçable par le JSON ci-dessous
 écrit dans ta réponse en texte libre : en conditions réelles, un verdict
 seulement écrit en prose (même avec le bon format JSON) n'a laissé aucune
-trace vérifiable après coup — voir `README.md`, "Validation sur machine
+trace vérifiable après coup — voir `documentation/historique-du-projet.md`, "Validation sur machine
 réelle", round 7. Le contrôle qualité n'est considéré terminé qu'une fois
 cette commande exécutée avec succès (code de sortie 0). Si elle échoue
 (mauvais statut, score hors limites...), corrige les arguments et

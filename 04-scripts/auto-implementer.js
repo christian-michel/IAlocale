@@ -172,7 +172,7 @@ async function main() {
 
   const brancheOrigine = git(['rev-parse', '--abbrev-ref', 'HEAD']);
 
-  // Trouvé en pratique (voir README, "Validation sur machine réelle") :
+  // Trouvé en pratique (voir documentation/historique-du-projet.md, "Validation sur machine réelle") :
   // un échec inattendu PENDANT un cycle (ex. git commit qui plante) peut
   // laisser le dépôt basculé sur une branche "auto-amelioration/*" sans
   // jamais revenir en arrière — le catch-all de main() logue et quitte,
@@ -220,7 +220,7 @@ async function main() {
 
   git(['add', ...fichiersTouches]);
 
-  // Cas trouvé en pratique (voir README, "Validation sur machine
+  // Cas trouvé en pratique (voir documentation/historique-du-projet.md, "Validation sur machine
   // réelle") : si le contenu proposé est BYTE POUR BYTE identique à ce
   // qui existe déjà (ex. une proposition de test rejouée sans avoir
   // nettoyé le résultat du passage précédent), `git add` ne stage rien

@@ -3,7 +3,7 @@
 # vraie installation (dsh + Ollama réellement configurés).
 #
 # AUCUNE partie de ce script n'a été exécutée dans mon environnement de
-# développement : ni dsh, ni Ollama n'y sont disponibles (voir README,
+# développement : ni dsh, ni Ollama n'y sont disponibles (voir documentation/historique-du-projet.md,
 # section "Non vérifiable"). C'est précisément pour ça qu'il existe —
 # lance-le sur ton Mac Mini, puis partage le contenu du dossier de
 # résultats pour que l'analyse de cohérence/pertinence/causes puisse se
@@ -11,7 +11,7 @@
 #
 # Ce script couvre :
 #   A. Santé d'infrastructure — chacun de ces 4 contrôles a déjà, une
-#      fois, invalidé silencieusement tout le reste (voir README) :
+#      fois, invalidé silencieusement tout le reste (voir documentation/historique-du-projet.md) :
 #      A.1 contexte Ollama réellement servi, A.2 mémoire GPU
 #      (iogpu.wired_limit_mb), A.3 dsh voit les skills du dépôt,
 #      A.4 l'outil de recherche web cloud est désactivé
@@ -74,7 +74,7 @@ if ! command -v dsh >/dev/null 2>&1; then
     exit 1
 fi
 if ! curl -s -o /dev/null http://127.0.0.1:11434/api/tags; then
-    journal "ÉCHEC : Ollama ne répond pas sur 11434. Lance : brew services start ollama (formule brew) ou ouvre l'app Ollama.app (voir README, 'Validation sur machine réelle', round 5 — brew ne gère pas forcément le vrai serveur)."
+    journal "ÉCHEC : Ollama ne répond pas sur 11434. Lance : brew services start ollama (formule brew) ou ouvre l'app Ollama.app (voir documentation/historique-du-projet.md, 'Validation sur machine réelle', round 5 — brew ne gère pas forcément le vrai serveur)."
     exit 1
 fi
 journal "dsh et Ollama répondent. Modèles disponibles :"
@@ -98,7 +98,7 @@ journal ""
 
 # --- A. Santé d'infrastructure ---
 # Contrôles rapides ajoutés après plusieurs régressions concrètes
-# rencontrées en conditions réelles (voir README, "Validation sur
+# rencontrées en conditions réelles (voir documentation/historique-du-projet.md, "Validation sur
 # machine réelle") — chacun fait réellement échouer le script plutôt que
 # de se contenter d'informer, puisque chacun a déjà, une fois, invalidé
 # silencieusement tout ce qui suivait.
@@ -108,7 +108,7 @@ journal "  A.2. Mémoire GPU (iogpu.wired_limit_mb)"
 if [ "$(uname)" = "Darwin" ]; then
     LIMITE_GPU=$(sysctl -n iogpu.wired_limit_mb 2>/dev/null || echo "?")
     if [ "$LIMITE_GPU" = "0" ] || [ "$LIMITE_GPU" = "?" ]; then
-        signaler_echec "A.2 : iogpu.wired_limit_mb=$LIMITE_GPU (automatique ou illisible) — ne survit pas à un redémarrage, relance ./04-scripts/setup-local-model.sh (voir README round 4/5/12)."
+        signaler_echec "A.2 : iogpu.wired_limit_mb=$LIMITE_GPU (automatique ou illisible) — ne survit pas à un redémarrage, relance ./04-scripts/setup-local-model.sh (voir documentation/historique-du-projet.md round 4/5/12)."
     else
         journal "     ✅ iogpu.wired_limit_mb=$LIMITE_GPU"
     fi
@@ -121,7 +121,7 @@ SORTIE_SKILLS=$(dsh --profile headless "Liste les skills que tu as à dispositio
 if echo "$SORTIE_SKILLS" | grep -qiE "decision-rapide|controle-qualite|ameliorateur"; then
     journal "     ✅ dsh voit les skills du dépôt"
 elif echo "$SORTIE_SKILLS" | grep -qE "skill_[0-9]+"; then
-    signaler_echec "A.3 : dsh ne renvoie que des ID numériques internes — relance ./04-scripts/configurer-skills-dsh.sh (voir README round 6/9)."
+    signaler_echec "A.3 : dsh ne renvoie que des ID numériques internes — relance ./04-scripts/configurer-skills-dsh.sh (voir documentation/historique-du-projet.md round 6/9)."
 else
     signaler_echec "A.3 : réponse inattendue de dsh, impossible de confirmer — sortie : $(echo "$SORTIE_SKILLS" | head -c 300)"
 fi
@@ -131,7 +131,7 @@ SORTIE_DUMP=$(dsh --profile headless --dump-config 2>&1)
 if echo "$SORTIE_DUMP" | grep -A10 "id: tool-web" | grep -q "disabled: true"; then
     journal "     ✅ tool-web désactivé (pas d'appel possible vers l'API cloud DeepSeek)"
 else
-    signaler_echec "A.4 : tool-web ne semble pas désactivé — relance ./04-scripts/desactiver-recherche-web-cloud.sh (voir README round 12)."
+    signaler_echec "A.4 : tool-web ne semble pas désactivé — relance ./04-scripts/desactiver-recherche-web-cloud.sh (voir documentation/historique-du-projet.md round 12)."
 fi
 journal ""
 
@@ -173,7 +173,7 @@ LIGNE_PS=$(ollama ps 2>/dev/null | grep "$MODELE_DETECTE" || true)
 if echo "$LIGNE_PS" | grep -q "32768"; then
     journal "     ✅ Contexte 32768 confirmé : $LIGNE_PS"
 else
-    signaler_echec "A.1 : contexte 32768 non confirmé dans 'ollama ps' (ligne : '${LIGNE_PS:-vide, modèle probablement déjà déchargé}') — voir README 'Pourquoi OLLAMA_CONTEXT_LENGTH...'."
+    signaler_echec "A.1 : contexte 32768 non confirmé dans 'ollama ps' (ligne : '${LIGNE_PS:-vide, modèle probablement déjà déchargé}') — voir documentation/historique-du-projet.md 'Pourquoi OLLAMA_CONTEXT_LENGTH...'."
 fi
 journal ""
 
@@ -217,7 +217,7 @@ journal "  D.14. Détection de syntaxe d'appel d'outil malformée dans les répo
 PROBLEME_D14=0
 for FICHIER in "$DOSSIER/3a-html5-sortie.txt" "$DOSSIER/3b-wordpress-sortie.txt"; do
     if grep -qE '<function=|<tool_call>|<parameter=' "$FICHIER" 2>/dev/null; then
-        signaler_echec "D.14 : syntaxe d'appel d'outil malformée détectée dans $(basename "$FICHIER") — glitch de template connu (voir README), un appel d'outil brut a fuité dans le texte final au lieu d'être exécuté."
+        signaler_echec "D.14 : syntaxe d'appel d'outil malformée détectée dans $(basename "$FICHIER") — glitch de template connu (voir documentation/historique-du-projet.md), un appel d'outil brut a fuité dans le texte final au lieu d'être exécuté."
         PROBLEME_D14=1
     fi
 done
@@ -234,7 +234,7 @@ for composant in decision-rapide controleur-de-controle controleur-qualite ameli
     N=$(grep -o "\"component\":\"$composant\"" "$DOSSIER/4-logs-recents.json" 2>/dev/null | wc -l | tr -d ' ')
     journal "  $composant : $N occurrence(s)"
 done
-# ATTENTION, trouvé en pratique (round 7, voir README "Validation sur
+# ATTENTION, trouvé en pratique (round 7, voir documentation/historique-du-projet.md "Validation sur
 # machine réelle") : decision-rapide et auto-implementer sont des
 # SCRIPTS Node instrumentés avec dsh-logger.js — un 0 occurrence pour
 # eux est un vrai signal d'absence d'engagement. controleur-de-controle
@@ -260,7 +260,7 @@ NOUVEAUX_REPLI=$((VERDICTS_APRES_REPLI - VERDICTS_AVANT_REPLI))
 if [ "$NOUVEAUX_PROJET" -gt 0 ]; then
     journal "     ✅ $NOUVEAUX_PROJET nouveau(x) verdict(s) consigné(s) dans $HARNESS_HOME/logs/pipeline.jsonl"
 elif [ "$NOUVEAUX_REPLI" -gt 0 ]; then
-    journal "     ⚠️  $NOUVEAUX_REPLI nouveau(x) verdict(s) trouvé(s), mais dans $HARNESS_HOME_REPLI/logs/pipeline.jsonl (repli par défaut) plutôt que dans le dépôt — problème HARNESS_HOME connu, voir README round 11. Le mécanisme fonctionne, pas un échec de ce contrôle."
+    journal "     ⚠️  $NOUVEAUX_REPLI nouveau(x) verdict(s) trouvé(s), mais dans $HARNESS_HOME_REPLI/logs/pipeline.jsonl (repli par défaut) plutôt que dans le dépôt — problème HARNESS_HOME connu, voir documentation/historique-du-projet.md round 11. Le mécanisme fonctionne, pas un échec de ce contrôle."
 else
     signaler_echec "C.7 : aucun nouveau verdict controleur-qualite consigné nulle part sur les tâches 3a/3b — l'étape obligatoire du round 8 (consigner-verdict-qualite.js) n'a probablement pas été suivie."
 fi

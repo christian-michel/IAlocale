@@ -1,7 +1,7 @@
 # Pistes d'évolution
 
 Idées soulevées en discussion après la validation complète du projet (voir
-`README.md`, section "Validation sur machine réelle") — consignées ici pour
+`documentation/historique-du-projet.md`, section "Validation sur machine réelle") — consignées ici pour
 ne pas les perdre, **pas encore commencées**. Chaque piste est décrite avec
 son état réel actuel (certaines existent déjà partiellement) et la
 recommandation donnée au moment où elle a été discutée.
@@ -17,7 +17,7 @@ du modèle par défaut (`agent-default-model`), sans consigne explicite.
 points listés ici — aucune contrainte technique identifiée.
 
 **Point d'ancrage concret, déjà vu dans un vrai `--dump-config`** (round 9,
-voir README) :
+voir documentation/historique-du-projet.md) :
 ```yaml
 - id: system-prompt
   config:
@@ -79,7 +79,7 @@ spécifique à chaque expertise visée, et seulement vérifiable à l'usage :
   début de session selon le sujet du jour" est déjà résolue.
 - **Recherche internet** : besoin d'un accès web, pas seulement d'un autre
   modèle — à traiter séparément. Rappel : l'outil de recherche web natif de
-  `dsh` a été désactivé (round 12, voir README) parce que câblé sur l'API
+  `dsh` a été désactivé (round 12, voir documentation/historique-du-projet.md) parce que câblé sur l'API
   cloud DeepSeek, contraire au principe local de ce projet. Une recherche
   web qui resterait locale/maîtrisée demanderait un autre mécanisme, pas
   encore défini.

@@ -59,7 +59,7 @@ silencieusement en faveur de l'un ou de l'autre : c'est à l'utilisateur
 de décider si la clé doit être révisée, pas à toi de l'ignorer.
 
 (Note : l'outil de recherche web natif de `dsh` est désactivé dans ce
-projet, voir README round 12. Cet "élargissement" s'appuie aujourd'hui
+projet, voir documentation/historique-du-projet.md round 12. Cet "élargissement" s'appuie aujourd'hui
 sur ton raisonnement général, pas sur une vraie recherche internet en
 direct. Si un accès web revient un jour, cette même priorité —
 renforcement seulement, jamais primauté — doit continuer à s'appliquer.)

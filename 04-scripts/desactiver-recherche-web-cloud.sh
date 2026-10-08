@@ -2,7 +2,7 @@
 # desactiver-recherche-web-cloud.sh — désactive le plugin tool-web (outil
 # web_search/web_fetch) sur les profils headless et web.
 #
-# Pourquoi ce script existe : trouvé en conditions réelles (voir README,
+# Pourquoi ce script existe : trouvé en conditions réelles (voir documentation/historique-du-projet.md,
 # "Validation sur machine réelle") — tool-web est natif du profil
 # headless (jamais installé par ce projet) et expose au modèle un outil
 # web_search câblé en dur sur l'API cloud DeepSeek

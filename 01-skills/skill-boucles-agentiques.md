@@ -55,7 +55,7 @@ demande-toi : *qui décide qu'on s'arrête, et sur quelle preuve ?*
 
 Un vrai mécanisme de hooks natif (comme le hook `Stop` de Claude Code)
 n'a jamais été confirmé dans `dsh` — voir la section "Non vérifiable"
-du `README.md`. `boucle-hook-stop.js` reproduit l'effet *depuis
+du `documentation/historique-du-projet.md`. `boucle-hook-stop.js` reproduit l'effet *depuis
 l'extérieur* (un script qui encadre l'appel à `dsh`), pas en s'intégrant
 au CLI. Si `dsh --profile web --dump-config` révèle un jour un vrai
 mécanisme de hooks, ce script devient une alternative de secours, pas la

@@ -1,432 +1,65 @@
-# dsh-harness — assistant IA local pour Mac Mini M4
+# IAlocale — assistant IA 100 % local pour Mac Mini M4
 
-Ce projet reprend et termine ce qui avait été commencé au début de cette
-conversation : le CLI `dsh` (`@deepseek-ai/dsh`, un agent de codage
-open-source dans l'esprit de Claude Code), avec les plugins demandés,
-**configuré pour tourner 100 % en local sur Ollama** plutôt que sur l'API
-cloud DeepSeek par défaut.
+Assistant IA qui tourne entièrement sur ta machine, sans aucune API
+cloud — basé sur `dsh` (agent de codage open-source) piloté par un
+modèle Ollama local. Orienté code et développement par défaut, mais
+capable de traiter des demandes plus larges (rédaction, analyse,
+relationnel, logique) grâce à ses skills.
 
-L'idée générale : un point de départ pour coder, pensé pour être étendu
-progressivement (personnalité, sagesse, philosophie) sans tout reconstruire.
+Pour l'historique technique complet (19+ rounds de validation réelle,
+bugs trouvés et corrigés, choix d'architecture détaillés) :
+**[`documentation/historique-du-projet.md`](documentation/historique-du-projet.md)**.
+Ce fichier-ci reste volontairement court — l'usage courant, pas le
+journal de bord.
 
-## 🧭 Pourquoi ce projet plutôt que l'autre (dsh-framework)
+## 🖥️ Configuration machine
 
-Voir la discussion complète dans la conversation, en résumé : `dsh` est un
-agent généraliste extensible par skills/workflows/plugins — exactement ce
-qu'il faut pour "commencer par le code, étendre ensuite". `dsh-framework`
-(le projet Python qu'on avait corrigé et outillé de logs juste avant) était
-un pipeline unique et figé, sans système d'extension, et pas réellement
-local (Kimi Code, la partie qui écrivait le code, appelle une API cloud).
-Les idées de ce projet-là (logs structurés, rétro-analyse) sont reprises
-ici — voir plus bas.
+- **Mac Mini M4**, 24 Go de RAM unifiée, 250 Go de disque
+- macOS (testé sur Mojave et plus récent — requis pour les protections
+  TCC dont ce projet tient compte)
+- Aucune carte graphique dédiée : le modèle tourne sur le GPU intégré
+  via Metal, d'où l'attention portée à la mémoire GPU (voir plus bas)
 
-## ✅ Vérifié dans ce paquet (testé, pas juste écrit)
+## 🧩 Stack logicielle
 
-- `dsh-logger.js` : testé en conditions réelles (erreurs normales, erreurs
-  silencieuses, décorateur `catchAndLog`, relecture, résumé, contexte de
-  rétro-analyse pour prompt).
-- `watch-knowledge-base.js`, `docker-test-runner.js`, `security-check.sh` :
-  exécutés réellement, logs structurés vérifiés.
-- Fusion de `settings.yaml` (`setup-local-model.sh`) : testée avec un
-  fichier existant contenant d'autres réglages — confirmé que seules les
-  clés gérées (`llm-pi-ai.providers.ollama`, `agent-default-model`) sont
-  modifiées, le reste est préservé intact.
-- Les 19 skills : frontmatter YAML validé individuellement
-  (`node 04-scripts/valider-skills-workflows.js`).
-- Les 5 workflows : JSON validé syntaxiquement.
-- Toute la chaîne shell (`start.sh`, `install-plugins.sh`,
-  `security-check.sh`) : testée de bout en bout dans un environnement sans
-  Docker/Ollama/dsh (le cas réel avant ta première installation) — échoue
-  proprement avec des messages clairs, jamais de plantage silencieux.
-- `memoire-cli.js` (`set`/`get`/`list`/`search`/`delete`/`clear`) et
-  `boucle-hook-stop.js` (cas succès, cas échec par épuisement du plafond
-  d'itérations, arguments manquants) : exécutés réellement, logs
-  structurés vérifiés dans `pipeline.jsonl`.
-- `boucle-surveillance.sh` : plusieurs cycles réels exécutés, arrêt
-  propre sur signal (trap) vérifié.
-- `basculer-modele.sh` : résolution de profil (`05-configs/modeles.yaml`)
-  testée, y compris profil inconnu ; délégation à `setup-local-model.sh`
-  confirmée jusqu'au point où Ollama devient nécessaire.
-- `decision-rapide.js`, moteur `ollama` : testé contre un faux serveur
-  Ollama (module `http` natif) rejouant la forme exacte de `/api/chat`
-  documentée par Ollama — 7 scénarios couverts (oui-non,
-  choix+justification, note sous le seuil de confiance, violation de
-  schéma par le modèle, erreur HTTP, réponse non-JSON, modèle
-  auto-détecté depuis `~/.dsh/settings.yaml`), revérifiés sans régression
-  après le refactoring pour le moteur `laya`. Le comportement contre un
-  VRAI Ollama (un vrai modèle respecte-t-il bien la contrainte de schéma
-  en pratique ?) reste à confirmer sur ta machine.
-- `decision-rapide.js`, moteur `laya` : ses deux garde-fous testés
-  réellement (type `note` refusé proprement, paquet non installé détecté
-  et signalé proprement). La décision elle-même (l'appel à
-  `Laya.load`/`systemOne`) n'a pas pu être exécutée — voir section
-  "Décision rapide" pour la cause précise (api.nuget.org bloqué dans mon
-  environnement).
-- `journal-desaccords.js` : testé directement — les trois résolutions
-  (`accord`, `desaccord`, `escalade_sans_comparaison`), `resume` global
-  et filtré (moyennes de confiance par résolution), `exporter` filtré,
-  et résilience à une ligne JSONL corrompue (ignorée et signalée, pas de
-  perte du reste du journal).
-- `identifier-meilleur` + `decision-rapide.js` ensemble : 3 scénarios de
-  bout en bout sur trois domaines différents (code, juridique, comptable
-  — voir section "Décision rapide"), y compris le cas où la confiance est
-  insuffisante et où le repli doit se déclencher.
-- `suite-tests-reelle.sh` : exécuté intégralement contre un faux `dsh` et
-  un faux Ollama, dans un dépôt git jetable (jamais celui-ci) — bug trouvé
-  et corrigé dans le stub de test lui-même (pas dans le script), logique
-  réelle confirmée : arguments transmis correctement à `dsh`, fichiers
-  livrés aux bons chemins, auto-implémentation fusionne/rejette comme
-  attendu. Ce que ce test NE prouve PAS : que le vrai `dsh` engage
-  réellement le contrôle qualité en pratique, ni qu'un vrai modèle est
-  bien calibré — c'est précisément ce que ce script sert à vérifier sur
-  la vraie machine.
+| Composant | Rôle |
+|---|---|
+| **`dsh`** (`@deepseek-ai/dsh`) | Agent de codage : boucle agentique, outils (fichiers, bash), skills, workflows |
+| **Ollama** | Sert le modèle en local sur `127.0.0.1:11434`, remplace l'API cloud DeepSeek par défaut de `dsh` |
+| **Qwen3-Coder** (`qwen3-coder:30b-a3b-q4_K_M`) | Modèle par défaut — MoE 30 Md de paramètres, 3 Md actifs par passe (vitesse d'un petit modèle, connaissances d'un plus gros), ~19 Go en Q4 |
+| **Laya** (optionnel) | Encodeur dédié (421 M de paramètres) pour des décisions fermées très rapides (oui/non, choix), en complément du gros modèle — voir `04-scripts/moteur-laya.js` |
 
-## ❌ Non vérifiable dans mon environnement
+Chacun des trois éléments interchangeables (emplacement d'installation,
+modèle, moteur Laya) n'existe qu'à un seul endroit dans le code —
+détails dans `documentation/historique-du-projet.md`, section
+"Portabilité".
 
-- Le vrai CLI `dsh` : le paquet complet a des centaines de
-  sous-dépendances, l'installation dans mon bac à sable dépasse le temps
-  imparti. Je n'ai donc **pas pu exécuter `dsh` lui-même**, seulement
-  vérifier l'existence des paquets et leur documentation officielle.
-- Le format exact des workflows JSON (`03-workflows/`) : je n'ai pas trouvé
-  la spec formelle de `dsh-workflow`. Ils suivent la structure plausible
-  du tutoriel d'origine, mais **teste-les avec un cas simple avant de t'y
-  fier** — la syntaxe réelle peut différer sur des détails.
-- `profile-plugins.yml` (config de `dsh-browser`/`modlens`) : structure
-  reprise du tutoriel d'origine, non confirmée champ par champ. Vérifie
-  avec `dsh --profile web --dump-config` après installation.
-- `DSH-better-sidebar` : confirmé qu'il existe, mais je n'ai pas pu
-  vérifier la syntaxe exacte d'installation depuis GitHub — le script gère
-  l'échec proprement si la commande ne correspond pas.
-- Un mécanisme de hooks natif dans `dsh` (équivalent au hook `Stop` de
-  Claude Code) : jamais confirmé. `boucle-hook-stop.js` (section
-  "Boucles agentiques") reproduit l'effet depuis l'extérieur en encadrant
-  l'appel à `dsh`, sans dépendre d'un tel mécanisme — mais si `dsh` en
-  expose un réellement, ce sera une meilleure option le jour où c'est
-  vérifié.
+## 🎯 Le projet
 
-## 📋 Vérification de la liste de plugins fournie
+Obtenir une IA qui travaille entièrement sur la machine, sans jamais
+envoyer de données vers un service cloud — ni pour le modèle, ni pour
+la recherche web (désactivée par défaut, voir plus bas). Pensé d'abord
+pour l'assistance au code (c'est le point fort du modèle par défaut),
+mais étendu par un système de skills (`01-skills/`) pour couvrir des
+tâches plus larges sans dépendre d'un meilleur modèle pour chacune :
+contrôle qualité à deux niveaux, auto-amélioration encadrée,
+décision rapide, mémoire structurée, relationnel, sagesse personnelle.
 
-| Demandé | Statut | Ce que j'ai fait |
-|---|---|---|
-| `dsh-agent-harness` | N'existe pas tel quel | C'est `@deepseek-ai/dsh`, le CLI de base — installé en premier |
-| `dsh_workflow` | Existe sous `dsh-workflow` (tiret) | Installé |
-| `dsh-find-plugins` | Dépôt GitHub, pas un paquet npm | Cloné, skills copiés |
-| `agentic-research` | Dépôt GitHub (BittnerPierre) | Cloné à côté (Python/uv, indépendant de dsh) |
-| `DSH-better-sidebar` ou `dsh-web` | Le premier existe ; `dsh-web` n'est pas un plugin séparé | Sidebar installée ; `dsh web` reste la sous-commande de lancement |
-| `ModLens` | `@liustack/modlens` | Installé, configuré pour Ollama local |
-| `dsh-browser` | Existe | Installé, `autoApprove: false` |
-| `dsh-TUI` | Existe sous `dsh-tui` | Installé (absent du paquet précédent, ajouté ici) |
+## 📋 Prérequis
 
-## 🦙 Configuration locale (le point important)
+Vérifiés et installés automatiquement par le script d'installation
+rapide (ci-dessous) — sauf Homebrew, qui demande une confirmation
+interactive :
 
-Par défaut, `dsh` démarre branché sur l'API cloud DeepSeek. Ce projet le
-reconfigure pour Ollama via `04-scripts/setup-local-model.sh`, qui :
+- **Homebrew** — gestionnaire de paquets macOS
+- **Node.js + npm** — fait tourner `dsh` et les scripts de ce projet
+- **pnpm** — requis par `dsh plugin add`
+- **git**
+- **Python 3 + le module PyYAML** — fusionne les fichiers de config YAML
+- **Ollama** — sert le modèle en local
+- **Docker** (optionnel) — uniquement pour `skill-testeur-docker`
 
-1. Fixe `OLLAMA_CONTEXT_LENGTH` explicitement (sinon Ollama choisit un
-   palier selon la mémoire détectée, ce qui peut silencieusement tronquer
-   les conversations de l'agent sans qu'aucune erreur ne le signale — voir
-   ci-dessous).
-2. Télécharge le modèle choisi (`qwen3-coder:30b-a3b-q4_K_M` par défaut —
-   change-le au besoin, ou utilise `04-scripts/basculer-modele.sh`) et
-   vérifie que l'id déclaré correspond **exactement** (avec les `:`) à ce
-   que sert Ollama, pour éviter un 404 silencieux.
-3. Fusionne le bloc `provider` local dans `~/.dsh/settings.yaml`, sans
-   toucher au reste de ta config.
-4. Configure la variable `OLLAMA_API_KEY` (factice mais requise — dsh
-   refuse de démarrer sans qu'une variable soit référencée, même pour un
-   serveur qui n'exige pas de vraie clé).
-
-### Pourquoi `OLLAMA_CONTEXT_LENGTH` mérite d'être fixé explicitement
-
-D'après la documentation, Ollama choisit sa fenêtre de contexte par défaut
-selon un palier de mémoire détectée — et si ce palier ne correspond pas à
-ce que `dsh` croit avoir (`contextWindow` dans `settings.yaml`), certains
-modèles tronquent silencieusement le milieu de la conversation sans rien
-signaler (d'autres, comme les architectures DeepSeek, refusent franchement
-— ce qui est en fait préférable, l'erreur est au moins visible). Vérifie
-après coup avec `ollama ps` (colonne `CONTEXT`) que le nombre correspond
-bien à ce que tu as déclaré.
-
-## ⚡ Optimisation pour Mac Mini M4 / 24 Go
-
-- **Le catalogue d'outils a un coût caché.** Sans aucun serveur MCP
-  connecté, une tâche triviale ("lis ce fichier CSV") peut consommer
-  ~14 700 tokens d'entrée rien qu'en schémas d'outils — un modèle local
-  paie ça en temps de traitement du prompt, pas en argent. Si les
-  réponses sont lentes, c'est souvent le premier levier à regarder avant
-  de changer de modèle.
-- **Modèle "instruct" plutôt que "thinking" par défaut pour le travail
-  d'agent.** Un modèle qui réfléchit avant chaque appel d'outil passe le
-  plus clair de son temps sur des tokens de raisonnement que la boucle
-  d'agent jette ensuite — pour du code assisté par outils, un modèle
-  instruct est souvent nettement plus rapide pour un résultat équivalent.
-  Réserve le "thinking" aux tâches qui en ont vraiment besoin (skill
-  `analyse-objectifs` par exemple), pas à l'exécution courante — voir les
-  profils `rapide`/`reflexion` de `05-configs/modeles.yaml`, à sélectionner
-  avec `04-scripts/basculer-modele.sh`.
-- **Privilégie un MoE à peu de paramètres actifs plutôt qu'un dense de
-  même taille "totale".** Le profil `rapide` (`qwen3-coder:30b-a3b-q4_K_M`)
-  a 30 Md de paramètres au total mais n'en active que 3 Md par passe — la
-  vitesse d'un petit modèle dense, les connaissances d'un plus gros.
-- **Dimensionnement mémoire** : ce même modèle en Q4 tient dans ~19 Go —
-  sur 24 Go de mémoire unifiée, il reste ~5 Go pour le contexte, le reste
-  du système. Ne fais tourner qu'un seul profil à la fois (24 Go ne
-  permet pas de charger `rapide` et `reflexion` simultanément).
-- **Pourquoi pas Kimi-K2.6 ou GLM-5.2** (demandés initialement) : ce sont
-  des MoE à ~1000 Md et ~744 Md de paramètres *totaux* — même en
-  quantification la plus agressive publiée, ils demandent respectivement
-  ~394 Go et ~241 Go de mémoire, très loin des 24 Go disponibles. Ollama
-  ne les propose d'ailleurs qu'en tags `:cloud` (renvoi vers
-  l'infrastructure Moonshot/Z.ai), ce qui violerait la contrainte "aucune
-  API cloud" en tête de ce fichier. Détail et sources dans
-  `05-configs/modeles.yaml`.
-
-## 📝 Logs et rétro-analyse (repris et adapté du projet précédent)
-
-`04-scripts/dsh-logger.js` journalise en JSON Lines dans `logs/pipeline.jsonl`,
-avec le même principe que sur `dsh-framework` : un niveau `SILENT_ERROR`
-pour tout ce qui, dans le code que l'agent écrit ou dans les scripts de ce
-projet, serait autrement attrapé et oublié sans laisser de trace.
-
-- **Consultation** : `node 04-scripts/errors-cli.js summary --hours 24`
-  ou `... list --level SILENT_ERROR`.
-- **Le skill `detection-erreurs-silencieuses`** encode les règles à
-  appliquer dans tout code généré (jamais de `catch` vide, toujours
-  logguer avant d'avaler une exception, attraper une exception précise
-  plutôt que générique).
-- **Rétro-analyse** : `errors-cli.js prompt-context` produit un résumé
-  texte des erreurs récentes, injectable dans un prompt — utilisé dans le
-  workflow `controle-qualite` avant de valider une réponse.
-- **`skill-apprendre-des-echecs`** boucle le tout : chaque échec significatif
-  s'écrit dans `06-data/sagesse/lecons-apprises.md`, réindexé automatiquement
-  par le watcher, donc consultable par `consulter-sagesse-interne` la fois
-  suivante.
-
-## 🔁 Boucles agentiques
-
-Cinq façons distinctes de faire tourner ce système en boucle, détaillées
-dans `01-skills/skill-boucles-agentiques.md` — en résumé :
-
-| # | Boucle | Implémentation ici |
-|---|---|---|
-| 01 | Boucle agentique | native à `dsh`, rien à configurer |
-| 02 | Critère d'arrêt dans le prompt | déjà dans `skill-controleur-qualite`, `skill-testeur-docker` |
-| 03 | Condition d'achèvement persistante (`/goal`) | `03-workflows/systeme-auto-ameliorant-avec-controle.workflow.json` |
-| 04 | Hook Stop déterministe | `04-scripts/boucle-hook-stop.js` |
-| 05 | Surveillance périodique (`/loop`) ⚠️ | `04-scripts/boucle-surveillance.sh` |
-
-**Règle d'or : une boucle ne vaut que ce que vaut son critère d'arrêt.**
-La boucle 05 ne termine jamais d'elle-même — ne pas l'utiliser comme
-substitut à un vrai critère de complétion (boucles 03/04). Voir le skill
-pour la table complète et les cas d'usage de chacune.
-
-## 🧠 Mémoire structurée
-
-En complément de `06-data/sagesse/lecons-apprises.md` (texte libre,
-indexé pour la recherche sémantique), l'agent dispose d'une mémoire
-structurée qu'il pilote lui-même en CRUD complet :
-`04-scripts/memoire-cli.js` (créer/lire/lister/rechercher/supprimer/vider
-des entrées typées et taguées, stockées dans
-`06-data/memoire/memoire.json`, exclu de l'index RAG). Voir
-`01-skills/skill-gestion-memoire.md` pour la méthode et la répartition
-des usages entre les deux mémoires.
-
-## ⚡ Décision rapide (inspiré de JEV)
-
-[JEV](https://simonwillison.net/2026/Sep/21/jev/) (TypeSafe AI) est un
-service cloud payant qui répond vite aux questions fermées (oui/non,
-choix, note) sans générer de texte libre — incompatible tel quel avec la
-contrainte 100% local. `04-scripts/decision-rapide.js` en reproduit le
-principe en local : un appel direct à Ollama (`/api/chat`, sortie
-contrainte par un JSON Schema, température 0), en évitant à la fois une
-génération complète ET le coût du catalogue d'outils de `dsh` (voir
-"Optimisation Mac Mini M4" plus haut). Un seuil de confiance configurable
-(`--seuil-confiance`) fait qu'une décision peu sûre est signalée comme
-telle (`fiable: false`, code de sortie 2) plutôt que d'être utilisée en
-confiance — à l'appelant d'escalader vers un skill délibératif complet
-dans ce cas. Voir `01-skills/skill-decision-rapide.md` pour la méthode.
-
-**Deux moteurs** (`--moteur ollama|laya`, `ollama` par défaut) : le gros
-modèle déjà configuré, ou [Laya](https://github.com/receptron/laya)
-(Convai Innovations, Apache 2.0) — concurrent open source de JEV, un
-encodeur dédié de 421M de paramètres (~2 Go de RAM) qui tourne à côté du
-gros modèle sans lui disputer la RAM. Nécessite `npm install` (seule
-dépendance npm de ce dépôt, volontairement optionnelle). **Non exécuté
-dans mon environnement** : `onnxruntime-node` (dépendance de Laya)
-télécharge son binaire natif depuis `api.nuget.org` à l'installation —
-host bloqué par le proxy réseau de mon bac à sable (confirmé dans son
-propre journal d'échecs), sans rapport probable avec un réseau
-domestique normal, mais à vérifier si `npm install` échoue chez toi
-aussi. Limites connues : pas de mesure de confiance pour le type `note`
-(refusé avec ce moteur), qualité en français non vérifiée (benchmarks
-publiés tous anglophones), pas de serveur persistant (chaque appel
-recharge le modèle, ~2 Go — voir `detail_timing` dans la sortie JSON).
-Détails dans `01-skills/skill-decision-rapide.md`.
-
-**Branché dans `identifier-meilleur`**
-(`systeme-auto-ameliorant-avec-controle.workflow.json`) : choisir le
-meilleur résultat parmi N expériences est un choix fermé — tente la voie
-rapide, retombe sur la comparaison délibérative si la confiance est
-insuffisante. Validé sur trois domaines (faux serveur Ollama, modèle réel
-non disponible dans mon environnement) :
-
-| Domaine | Candidats | Décision | Confiance | Résultat |
-|---|---|---|---|---|
-| Code (validation d'email) | 3, scores 6.5/9.2/7.8 | index 1 | 0.93 | ✅ rapide, fiable |
-| Juridique (clause de résiliation) | 2, scores proches 7.1/7.4 | index 1 | 0.52 | ⚠️ sous le seuil → repli délibératif |
-| Comptable (amortissement) | 3, scores 5.0/8.8/6.2 | index 1 | 0.88 | ✅ rapide, fiable, avec justification |
-
-Le cas juridique démontre le garde-fou : des candidats aux scores proches
-produisent une confiance faible, et le mécanisme refuse de trancher seul
-plutôt que de deviner.
-
-### Journal des désaccords — vers un Laya qui s'améliore par l'usage
-
-`04-scripts/journal-desaccords.js` consigne chaque `fiable: false` de
-`decision-rapide.js`, puis complète la ligne avec le résultat
-délibératif une fois connu (`accord` / `desaccord` /
-`escalade_sans_comparaison`, calculés, jamais déclarés directement).
-Append-only par conception — pas de commande de suppression — puisque
-c'est la matière première envisagée pour un éventuel fine-tuning de
-Laya : on ne fine-tune rien sans exemples réels de ce qui a posé
-problème. Le fine-tuning lui-même reste un chantier séparé, non entamé
-(voir `01-skills/skill-journal-desaccords.md`).
-
-Câblé dans `identifier-meilleur` (v1.4.0) : testé directement (3
-résolutions, résumé agrégé avec moyennes de confiance par résolution,
-export filtré, résilience à une ligne JSONL corrompue) ; l'engagement
-réel depuis `dsh-workflow` hérite de la même réserve que le reste de ce
-workflow — non vérifiable dans mon environnement.
-
-## 🔍 Contrôle à deux niveaux
-
-L'agent de contrôle du travail fourni existait déjà : c'est
-`skill-controleur-qualite` (complétude, précision, test pratique,
-historique d'erreurs — voir `controle-qualite.workflow.json`, étape
-`verifier-reponse`). Pas dupliqué ici — un second niveau lui a été
-adjoint à la place :
-
-```
-verifier-reponse (skill-controleur-qualite)
-        │  "la réponse est-elle VALIDE ?"
-        ▼
-contre-verifier (skill-controleur-de-controle)   ← nouveau
-        │  "le verdict ci-dessus tient-il debout ?"
-        ▼
-   CONFIRME · ou · A_RECONSIDERER
-```
-
-`skill-controleur-de-controle` (nouveau) n'audite pas la réponse
-originale — il audite le *verdict* du premier contrôleur : cohérence
-entre `statut` et `verifications`, score plausible au vu des problèmes
-listés, contrôle réellement complet, outils de vérification réellement
-utilisés (pas un jugement "à l'œil"). Il ne remplace jamais le verdict de
-son propre chef (voir sa règle d'or) — un désaccord
-(`verdict_final: A_RECONSIDERER`) est seulement *signalé* dans la sortie
-du workflow (`verdict_meta`, `divergences_meta`) et empêche
-`reponse_finale` d'être renvoyée automatiquement, même si le premier
-contrôleur avait dit `VALIDE`. Un désaccord déclenche aussi
-`skill-apprendre-des-echecs` et le cycle d'auto-amélioration, au même
-titre qu'un échec de tâche classique.
-
-C'est un choix délibéré de ne pas automatiser la résolution du
-désaccord : un contrôle qui se contente de voter à la majorité entre deux
-agents n'est pas plus fiable qu'un seul — juste plus rassurant en
-apparence (voir `06-data/personnalite/valeurs.md` : l'honnêteté sur ce
-qu'on sait et ne sait pas prime sur l'apparence de certitude).
-
-## 🔄 Auto-itération et auto-implémentation
-
-Le système peut se modifier lui-même — pas seulement proposer, réellement
-appliquer. Périmètre volontairement restreint : uniquement
-`01-skills/*.md` et `03-workflows/*.json`, jamais `04-scripts/` ni
-`05-configs/` (décision explicite, voir
-`01-skills/skill-auto-implementation.md`).
-
-```
-skill-ameliorateur-systeme (propose, en tenant compte de 06-data/personnalite/valeurs.md)
-        ↓
-04-scripts/auto-implementer.js (applique sur une branche git dédiée)
-        ↓
-04-scripts/valider-skills-workflows.js (vérification déterministe)
-        ↓
-    fusion si vert · branche conservée pour relecture si rouge · jamais de push
-```
-
-Trois déclencheurs, combinables : sur demande explicite (workflow
-`03-workflows/auto-amelioration.workflow.json`), après un échec
-significatif (enchaîné automatiquement depuis
-`controle-qualite.workflow.json`), ou périodiquement via
-`boucle-surveillance.sh` (qui ne fait que déclencher — le vrai critère
-d'arrêt reste la vérification déterministe à l'intérieur du cycle).
-
-`06-data/personnalite/valeurs.md` porte le principe directeur de toute
-auto-modification : chercher le bonheur et la sagesse, l'harmonie avec
-l'environnement et avec les autres — un critère que `skill-evaluateur`
-note explicitement, mais qui reste un jugement du modèle, pas un verrou
-automatique (seule la validité syntaxique l'est).
-
-⚠️ Comme `04-scripts/*.js` est testable sans Ollama/dsh,
-`auto-implementer.js` a été testé réellement (fusion réussie, rejet après
-échec de vérification avec branche conservée, rejet d'un type/chemin hors
-périmètre y compris une tentative de traversée de chemin) — dans un dépôt
-jetable, jamais dans ce dépôt-ci. Le reste de la chaîne (orchestration par
-`dsh-workflow`) hérite de la même réserve que les autres workflows : non
-vérifiable formellement dans mon environnement.
-
-## 🔀 Modèles interchangeables
-
-`05-configs/modeles.yaml` déclare des profils de modèles nommés (ex.
-`rapide` pour l'exécution d'agent courante, `reflexion` pour les tâches
-qui demandent un vrai raisonnement — voir la section "Optimisation pour
-Mac Mini M4" ci-dessus). `04-scripts/basculer-modele.sh <profil>` résout
-le profil et délègue à `setup-local-model.sh` :
-
-```bash
-./04-scripts/basculer-modele.sh              # liste les profils
-./04-scripts/basculer-modele.sh reflexion    # bascule vers le profil "reflexion"
-```
-
-## 🧩 Portabilité : un seul endroit à changer par élément interchangeable
-
-Trois choses de ce projet sont pensées pour pouvoir être remplacées sans
-toucher au reste du code — chacune n'existe qu'à un seul endroit :
-
-- **Emplacement de l'installation (`HARNESS_HOME`)** : avant, `const
-  HARNESS_HOME = process.env.HARNESS_HOME || path.join(os.homedir(),
-  'dsh-harness')` était redéclaré à l'identique dans 4 fichiers
-  (`dsh-logger.js`, `journal-desaccords.js`, `watch-knowledge-base.js`,
-  `memoire-cli.js`). Désormais, `04-scripts/config.js` est la seule
-  déclaration ; les quatre fichiers l'importent
-  (`import { HARNESS_HOME } from './config.js'`). Déplacer
-  l'installation ne demande toujours que de positionner la variable
-  d'environnement `HARNESS_HOME` (déjà le mécanisme existant) — mais
-  il n'y a plus qu'un seul fichier à vérifier si ce mécanisme doit
-  changer de nature un jour.
-- **Nom du modèle LLM** : `05-configs/modeles.yaml` (`profil-par-defaut`)
-  est l'unique source de vérité, déjà lue par `basculer-modele.sh`. Avant
-  ce refactor, `setup-local-model.sh` gardait son propre id de modèle en
-  dur comme valeur par défaut (`MODEL="${1:-qwen3-coder:...}"`) — un
-  deuxième endroit qui pouvait diverger du premier. Il résout maintenant
-  ce même défaut depuis `05-configs/modeles.yaml` quand aucun argument
-  n'est passé, avec le même mécanisme Python/YAML que `basculer-modele.sh`
-  (testé via mocks : résolution confirmée identique dans les deux cas,
-  argument explicite toujours prioritaire).
-- **Laya** : toute l'intégration avec `@receptron/laya` (chargement du
-  modèle, `systemOne`, fermeture, conversion du résultat) est désormais
-  isolée dans `04-scripts/moteur-laya.js`, qui exporte une seule fonction
-  `decisionViaLaya`. `decision-rapide.js` l'importe et ne référence plus
-  jamais `@receptron/laya` ni son API directement. Remplacer Laya par un
-  autre moteur de décision rapide local ne devrait demander de toucher
-  qu'à ce fichier.
-
-`suite-tests-reelle.sh` a aussi vu ses deux occurrences du chemin de
-repli `$HOME/dsh-harness` (round 11) fusionnées dans une seule variable
-`HARNESS_HOME_REPLI`, déclarée une fois en haut du script.
-
-## 🚀 Installation
-
-### En une seule commande (machine neuve)
+## 🚀 Installation rapide
 
 ```bash
 git clone <url-du-depot> ~/dsh-harness
@@ -434,32 +67,25 @@ cd ~/dsh-harness
 ./04-scripts/bootstrap-complet.sh
 ```
 
-Vérifie et installe, dans l'ordre, tout ce dont ce projet a eu besoin au
-fil de son développement — Homebrew (détecté, pas installé
-automatiquement : demande une confirmation interactive de ta part),
-Node/npm, pnpm, git, python3 + le module PyYAML, Docker (optionnel),
-Ollama — puis enchaîne `install-plugins.sh`,
-`setup-local-model.sh`, `configurer-skills-dsh.sh` et
-`desactiver-recherche-web-cloud.sh`. But explicite : effacer le Mac Mini
-et tout retrouver avec une seule commande. Chaque script reste aussi
-utilisable séparément (détail ci-dessous) — `bootstrap-complet.sh` ne
-fait que les enchaîner avec les vérifications de prérequis qui leur
-manquaient en amont.
-
-Teste ensuite avec `./04-scripts/suite-tests-reelle.sh`.
-
-### Étape par étape (ou pour comprendre ce que fait le script ci-dessus)
+Installe tout ce qui manque (avec confirmation pour Homebrew),
+configure le modèle local, déclare les skills de ce dépôt auprès de
+`dsh`, désactive la recherche web cloud. Teste ensuite avec :
 
 ```bash
-unzip dsh-harness.zip -d ~/dsh-harness
+./04-scripts/suite-tests-reelle.sh
+```
+
+## 🔧 Installation détaillée (étape par étape)
+
+```bash
 cd ~/dsh-harness
 
 # 1. Installer dsh + tous les plugins
 ./04-scripts/install-plugins.sh
 
-# 2. Configurer le modèle local (profil "rapide" par défaut, voir
-#    05-configs/modeles.yaml — ou directement : ./04-scripts/basculer-modele.sh rapide)
-./04-scripts/setup-local-model.sh qwen3-coder:30b-a3b-q4_K_M
+# 2. Configurer le modèle local (résout le profil par défaut tout seul,
+#    voir 05-configs/modeles.yaml — ou choisis-en un : ./04-scripts/basculer-modele.sh rapide)
+./04-scripts/setup-local-model.sh
 
 # 3. Vérifier que le contexte réellement servi correspond
 ollama run qwen3-coder:30b-a3b-q4_K_M 'bonjour' >/dev/null && ollama ps
@@ -468,1172 +94,117 @@ ollama run qwen3-coder:30b-a3b-q4_K_M 'bonjour' >/dev/null && ollama ps
 #    ~/.dsh/profiles/headless/, nécessaire à l'étape 5
 dsh --profile headless 'Explique-moi ce que fait 04-scripts/dsh-logger.js'
 
-# 5. Déclarer 01-skills/ de ce dépôt auprès de dsh (sinon il ne voit que
-#    ses skills internes, voir "Validation sur machine réelle", round 6)
+# 5. Déclarer 01-skills/ de ce dépôt auprès de dsh
 ./04-scripts/configurer-skills-dsh.sh
 
-# 6. Désactiver l'outil de recherche web natif de dsh, câblé sur l'API
-#    cloud DeepSeek (contraire au principe "aucune API cloud" de ce
-#    projet) — voir "Validation sur machine réelle", round 12
+# 6. Désactiver l'outil de recherche web natif de dsh (câblé sur l'API cloud DeepSeek)
 ./04-scripts/desactiver-recherche-web-cloud.sh
-
-# 7. Lancement complet
-./start.sh
 ```
 
-## 🧪 Validation sur machine réelle
-
-Tout ce qui précède a été écrit et testé contre des substituts (faux
-serveur Ollama, faux `dsh`, dépôts git jetables) — jamais contre une
-vraie installation, faute d'Ollama/dsh disponibles dans l'environnement
-où ce projet est développé. `04-scripts/suite-tests-reelle.sh` referme
-cet écart : à lancer une fois l'installation ci-dessus terminée.
-
-```bash
-./04-scripts/suite-tests-reelle.sh
-```
-
-Il enchaîne, en conditions réelles :
-1. Validation syntaxique de tous les skills/workflows.
-2. `decision-rapide.js` sur 3 domaines (code, juridique, comptable).
-3. **2 tests techniques de bout en bout via `dsh`** : une page HTML5, un
-   thème WordPress nommé `test` — chacun avec consigne explicite de
-   passer par le contrôle qualité avant de considérer la tâche finie.
-4. Comptage des traces de chaque composant clé
-   (`decision-rapide`/`controleur-de-controle`/`controleur-qualite`/
-   `ameliorateur-systeme`/`auto-implementer`) dans le journal structuré —
-   un composant à 0 occurrence après les tests 3a/3b signale qu'il ne
-   s'est probablement pas engagé, ce qui n'a jamais pu être confirmé
-   depuis mon environnement.
-5. `auto-implementer.js` : une proposition qui doit fusionner, une qui
-   doit être refusée — sur un fichier de test clairement jetable
-   (`skill-test-validation-reelle.md`, à supprimer après coup, instructions
-   affichées en fin de script).
-
-Résultats dans `logs/validation-<horodatage>/` (déjà exclu du dépôt par
-`.gitignore`, puisque tout `logs/` l'est). **Logique du script validée
-de bout en bout ici** (faux `dsh`/Ollama, dépôt git jetable — jamais ce
-dépôt-ci) : arguments correctement transmis, fichiers correctement créés
-aux bons chemins, auto-implémentation fusionne/rejette comme attendu.
-Ce qui reste à vérifier UNIQUEMENT sur la vraie machine : si `dsh`
-engage réellement le pipeline de contrôle qualité en pratique, et si
-les décisions rapides sont bien calibrées avec un vrai modèle.
-
-### Premier passage réel (2026-10-05) — ce qui a été trouvé, corrigé, et ce qui reste ouvert
-
-Trois rounds d'allers-retours avec des données réelles (`which dsh`,
-`dsh --version` = `0.1.7-rc.2`, puis `dsh --profile headless/web
---dump-config` en entier). Six causes distinctes identifiées, pas une
-panne généralisée :
-
-1. **Section 2 : "Aucun modèle déclaré".** `decision-rapide.js` ne lisait
-   que `~/.dsh/settings.yaml` — alors que la vraie config active de cette
-   version de `dsh` vit dans
-   `~/.dsh/profiles/<profil>/cordis.patch.yml`, un fichier différent.
-   **Corrigé** : `lireModeleParDefaut()` retombe maintenant sur
-   `ollama list` (même logique que `suite-tests-reelle.sh`) si
-   `settings.yaml` ne donne rien — testé avec/sans ce fichier présent,
-   comportement confirmé dans les deux cas.
-2. **Section 5 : "not a git repository".** Le dossier du projet n'a pas
-   de `.git` — probablement un "Download ZIP" GitHub plutôt qu'un
-   `git clone` (le nom de dossier correspond exactement à cette
-   convention). **Corrigé** : message d'erreur explicite sur cette cause
-   et comment vérifier.
-3. **`pnpm` absent — les 5 installations de plugins échouaient
-   silencieusement.** `install-plugins.sh` ne vérifiait jamais sa
-   présence avant d'appeler `dsh plugin add`, qui en dépend. **Corrigé** :
-   vérifié une fois en amont, message clair (`brew install pnpm`) au lieu
-   de 5 échecs identiques et cryptiques.
-4. **La politique d'approbation du sandbox bloque les écritures en
-   headless — confirmé dans `--dump-config` lui-même** :
-   `approval.policy = (DSH_PERMISSION_MODE ?? 'workspace-write') ===
-   'danger-full-access' ? 'never' : 'ask'`. En `--profile headless`,
-   personne ne répond jamais à "ask". **Traité, pas activé par défaut** :
-   `suite-tests-reelle.sh` accepte maintenant
-   `AUTORISER_ECRITURE_HEADLESS=1` pour positionner
-   `DSH_PERMISSION_MODE=danger-full-access` — mais ce réglage désactive
-   aussi le confinement du sandbox, pas seulement l'attente d'approbation,
-   donc jamais activé sans un choix explicite de ta part.
-5. **Bonne nouvelle, hypothèse éliminée** : `tool-workflow`,
-   `workflow-ptc`, `goal`, `skill`, `skill-filesystem`, `tool-skill` sont
-   natifs du profil `headless` — leur absence n'explique donc **pas** les
-   réponses hors sujet des tests 3a/3b ; ce n'est pas lié au plugin
-   `dsh-workflow` resté non installé (point 3).
-6. **Ouvert** : `skill-filesystem` n'a pas de `customSkillDirs` visible
-   dans la config active de `headless`/`web` — seul le préréglage
-   "cordis" (non utilisé par défaut d'après le dump) en déclare un, et il
-   pointe vers le dossier interne du paquet `dsh-agent-preset`, pas vers
-   `01-skills/` de ce projet. Reste à confirmer : `dsh` voit-il vraiment
-   les skills de ce dépôt ? Test direct suggéré :
-   `dsh --profile headless "Liste les skills que tu as à disposition."`
-   — avant de conclure quoi que ce soit, plutôt que de continuer à
-   décortiquer la config à l'aveugle.
-
-### Round 3 — hypothèse de compaction, infirmée au round suivant
-
-Le test suggéré au point 6 a été lancé :
-`dsh --profile headless "Liste les skills que tu as à disposition."`.
-Au lieu d'une liste de skills, la sortie contenait un bloc de texte qui
-ressemblait à un prompt interne de **compaction de conversation**.
-Hypothèse formulée à l'époque : `dsh-compaction-basic`/`dsh-command-compact`
-(actifs en `headless` d'après `--dump-config`) se déclenchant à cause d'une
-fenêtre de contexte (32768) trop étroite face au catalogue d'outils
-(~14 700 tokens, voir "Optimisation..." ci-dessous).
-
-**Infirmée au round 4** : le flux brut (`--json`) d'un nouvel essai ne
-contient aucun événement de compaction, seulement une erreur de transport
-pure — voir juste en dessous. Le texte observé au round 3 était
-vraisemblablement un repli générique de `dsh` face à cette même erreur,
-pas une compaction réelle.
-
-### Round 4 — la vraie piste : crash GPU, indépendant de `dsh`
-
-`dsh --profile headless --json "..."` a produit une erreur nette :
-```json
-{"usage":{"inputTokens":0,"outputTokens":0,"totalTokens":0}}
-{"reason":{"kind":"error","error":{"message":"Stream ended without finish_reason","code":"TRANSPORT"}}}
-```
-Coupure avant même qu'un seul token ne soit compté — pas pendant la
-génération, avant. `tail ~/.ollama/logs/server.log` a montré la vraie
-cause :
-```
-error: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory)
-llama_decode: failed to decode, ret = -3
-```
-Confirmé indépendant de `dsh` : `ollama run qwen3-coder:30b-a3b-q4_K_M
-"Dis juste bonjour."` (sans `dsh`, sans outils, 3 mots) plantait pareil,
-avec la même erreur dans le log, même sur un prompt de 13 tokens. Le
-modèle (~19 Go en Q4) dépassait le plafond de mémoire GPU que macOS
-autorise Metal à verrouiller sur cette machine (`iogpu.wired_limit_mb`,
-qui valait `0` = automatique, généralement ~75 % de la RAM totale — donc
-~18 Go sur 24 Go, juste sous les ~19 Go du modèle).
-
-Le même log a aussi confirmé, séparément, le point 6 du round 2 :
-`n_ctx_slot = 4096`, pas 32768 — le réglage `OLLAMA_CONTEXT_LENGTH` du
-round 1 n'avait jamais atteint le serveur réellement en cours
-d'exécution.
-
-### Round 5 — cause racine unique confirmée pour les deux bugs, corrigée
-
-`sudo sysctl iogpu.wired_limit_mb=22528` appliqué à chaud n'a rien changé
-(même crash, même prompt minimal) — signe que le processus serveur déjà
-démarré ne relit pas ce réglage en cours de route. Investigation :
-```
-ps aux | grep -i ollama
-→ /Applications/Ollama.app/Contents/Resources/llama-server ...
-→ /Applications/Ollama.app/Contents/MacOS/Ollama hidden   (démarré au login, 8:38)
-→ /usr/local/bin/ollama serve
-```
-**Cause racine unique pour les deux bugs ouverts (contexte à 4096 ET crash
-GPU)** : sur cette machine, Ollama tourne via l'app officielle
-`Ollama.app` (démarrée au login), pas comme formule `brew`. Or
-`setup-local-model.sh` (depuis le tout premier round) appelait
-`brew services restart ollama >/dev/null 2>&1 || true` pour appliquer tout
-changement — un **no-op silencieux** quand `ollama` n'est pas une formule
-brew. Le vrai serveur n'a donc jamais été redémarré par ce script, ni pour
-`OLLAMA_CONTEXT_LENGTH` (round 1), ni pour `iogpu.wired_limit_mb` (round
-4) : les deux réglages existaient bien quelque part (variable
-d'environnement, sysctl noyau) mais n'avaient jamais atteint le processus
-qui sert réellement les requêtes.
-
-Confirmé en tuant et relançant le vrai processus
-(`pkill -x Ollama; pkill -f "ollama serve"; open -a Ollama`) avec
-`iogpu.wired_limit_mb=22528` actif : `ollama run ... "Dis juste bonjour."`
-a répondu (`Bonjour ! 😊`), et le log a montré `n_ctx_slot = 32768` — les
-deux bugs résolus par le même redémarrage, confirmant qu'ils partageaient
-la même cause.
-
-**Corrigé** dans `setup-local-model.sh` :
-- Relève désormais `iogpu.wired_limit_mb` (calculé depuis `hw.memsize`,
-  marge de 2 Go pour macOS) à chaque exécution — avec avertissement
-  explicite que ce réglage ne survit pas à un redémarrage de la machine
-  (à refaire après chaque reboot en relançant ce script).
-- `redemarrer_ollama()` détecte maintenant le vrai mode d'exécution
-  (formule brew / `Ollama.app` / `ollama serve` lancé à la main) et
-  redémarre le bon processus en conséquence, avec un message clair dans
-  chaque cas — plus aucun échec avalé silencieusement par `|| true`.
-- Messages d'aide de `security-check.sh` et `suite-tests-reelle.sh`
-  mis à jour pour mentionner `Ollama.app` comme alternative à
-  `brew services start`.
-
-**Reste ouvert** : la question initiale du point 6 (round 2) —
-`dsh` voit-il vraiment les skills de `01-skills/` — n'a toujours pas été
-testée pour de vrai, le serveur étant resté cassé jusqu'ici. À relancer
-maintenant que le serveur répond :
-`dsh --profile headless "Liste les skills que tu as à disposition."`.
-
-### Round 6 — `dsh` ne voit que ses skills internes, corrigé
-
-Le test ci-dessus a été lancé : réponse obtenue (le serveur répond
-désormais, round 5), mais uniquement des ID numériques internes
-(`skill_30103000534672`, etc. — le préréglage `cordis` de `dsh`), aucun
-des skills de ce dépôt. **Point 6 du round 2 tranché** : confirmé, `dsh`
-ne voyait pas `01-skills/`.
-
-Cause trouvée sans deviner, via `dsh --dump-config-schema` (nouvelle
-option découverte dans `dsh --help`, qui n'était pas documentée dans ce
-projet avant) : le plugin `skill-filesystem` accepte une clé
-`customSkillDirs` — tableau de chemins absolus, défaut `[]` :
-```json
-"customSkillDirs": {"default": [], "anyOf": [{"type": ["array", "null"],
-"items": {"type": ["string", "null"]}}, ...]}
-```
-Rien ne la renseignait dans les profils `headless`/`web` de cette
-machine — d'où le repli sur les skills internes.
-
-**Corrigé** : nouveau script `04-scripts/configurer-skills-dsh.sh`, qui
-fusionne une entrée `skill-filesystem` → `config.customSkillDirs` dans
-`~/.dsh/profiles/<profil>/cordis.patch.yml`, pour `headless` et `web`.
-Deux précautions, par analogie avec les pièges déjà rencontrés dans ce
-projet :
-- Le chemin est calculé (jamais écrit en dur) — le nom de ce dossier
-  change d'un checkout à l'autre (même piège "Download ZIP" que dans
-  `auto-implementer.js`).
-- Ce fichier de patch autorise explicitement des expressions `!!js` dans
-  son propre commentaire d'en-tête — un aller-retour
-  `yaml.safe_load`/`safe_dump` les corromprait. Le script refuse de
-  toucher au fichier si une vraie expression `!!js` y est détectée (en
-  excluant les lignes de commentaire de cette recherche : testé que le
-  commentaire d'en-tête lui-même, qui *mentionne* `!!js` sans l'utiliser,
-  ne déclenche plus de faux positif). Préserve aussi ce commentaire
-  d'en-tête, que PyYAML aurait sinon supprimé.
-
-Testé : fusion sur un fichier avec contenu existant (entrées préservées),
-sur un fichier minimal, idempotence sur deux passages (pas de doublon de
-chemin), et refus confirmé face à un vrai `!!js` — contre de faux
-`~/.dsh/profiles/`, jamais la vraie machine depuis cet environnement.
-**Confirmé en conditions réelles** : `./04-scripts/configurer-skills-dsh.sh`
-puis `dsh --profile headless "Liste les skills..."` renvoie les 19 skills
-de `01-skills/` avec leurs vraies descriptions (`ameliorateur-systeme`,
-`decision-rapide`, `controleur-de-controle`, etc.) — plus aucun ID
-numérique interne.
-
-### Round 7 — le protocole complet tourne enfin ; ce qu'il révèle vraiment
-
-`./04-scripts/suite-tests-reelle.sh` lancé en entier pour la première
-fois avec un serveur sain et les skills visibles :
-
-- **Section 2 (décision rapide, 3 domaines)** : ✅ sans réserve — rapide
-  (856 à 1815 ms), confiance 0.9-0.95, justification cohérente sur le cas
-  comptable.
-- **Section 3 (HTML5, WordPress)** : les fichiers existent bien sur le
-  disque, contenu correct (vérifié directement, pas seulement le texte de
-  `dsh`) — **pas de confabulation**, hypothèse initiale de ce round
-  infirmée.
-- **Section 4 (traces dans les logs)** : 0 occurrence pour tous les
-  composants, y compris `controleur-qualite` — mais **ce chiffre ne
-  voulait rien dire pour ce composant-là**, voir plus bas. Corrigé dans
-  le script.
-- **Section 5 (auto-implémentation)** : `not a git repository` — confirmé
-  pour de vrai cette fois (`git status` échoue aussi en dehors de
-  `auto-implementer.js`). Ce dossier n'est effectivement pas un vrai
-  `git clone` (cause déjà pressentie au round 2, jamais vérifiée
-  directement jusqu'ici). **À corriger côté utilisateur, pas dans ce
-  dépôt** : recloner proprement
-  (`git clone -b claude/determined-pasteur-50jhkd <url> <nouveau-dossier>`),
-  rien à migrer (la config `dsh`/Ollama est globale à la machine).
-
-Un test ciblé en plus, avec `--json` et permissions débloquées, pour
-voir ce qui se passe vraiment derrière le texte final de `dsh` :
-
-1. **Le skill `controle-qualite` est réellement invoqué** — un vrai
-   `tool_call` avec `"tool":"skill","input":{"name":"controle-qualite"}`
-   apparaît dans le flux, avec ses instructions complètes renvoyées en
-   retour. La section 4 ne peut donc **pas** servir à juger de cet
-   engagement : `controleur-qualite`/`controleur-de-controle` sont des
-   skills (texte renvoyé par `dsh`), pas des scripts instrumentés avec
-   `dsh-logger.js` comme `decision-rapide`/`auto-implementer` — rien
-   n'écrit jamais dans ce journal pour eux, qu'ils tournent ou non. Un 0
-   occurrence pour ces deux-là ne prouvait rien ; **corrigé** dans
-   `suite-tests-reelle.sh` (message explicite sur cette distinction,
-   plutôt que l'ancienne conclusion erronée "ne s'est probablement pas
-   engagé").
-2. **Mais une fois chargé, le skill n'est pas vraiment suivi.** Ses
-   instructions demandent d'appeler `node 04-scripts/errors-cli.js
-   summary --hours 24`, d'utiliser `testeur-docker` pour le code, et de
-   produire un verdict JSON structuré (`{"statut": "VALIDE", "score":
-   ...}`). Aucune de ces trois choses n'a lieu dans le flux observé — le
-   modèle écrit juste en prose libre "*Le contrôle qualité a déjà été
-   effectué*" sans l'avoir fait. Sur un modèle local de cette taille
-   (30B Q4), le skill semble lu comme une information de contexte plutôt
-   que comme une checklist contraignante à dérouler. **Pas corrigé** :
-   c'est un choix de conception (renforcer le skill pour le rendre
-   contraignant et traçable, par exemple avec une étape finale
-   obligatoire qui logue via `dsh-logger.js`, vs. accepter cette limite
-   documentée pour un modèle de cette taille) — à trancher avant d'y
-   toucher, pas une décision à prendre seul.
-3. Détail annexe, pas un bug : `write` refuse d'écrire hors du dossier du
-   projet sans lecture préalable (confirmé : échoue sur `/tmp/...`,
-   réussit immédiatement en chemin relatif dans le projet) — ressemble à
-   une frontière de sandbox volontaire. Le modèle a contourné
-   intelligemment via `bash cp` plutôt que d'abandonner.
-
-Reclonage effectué côté utilisateur, confirmé par un second passage
-complet de `suite-tests-reelle.sh` : **section 5 fonctionne désormais
-intégralement** (5a fusionne, 5b est refusée avant écriture, logs
-`auto-implementer` présents) — le dernier blocage restant du round 7 est
-levé. `4-logs-recents.json` de ce passage confirme aussi, sans surprise,
-que seules les sections 1-2 (scripts instrumentés) apparaissent dans le
-journal — cohérent avec ce que ce round avait déjà établi sur les
-composants de type skill.
-
-Détail observé sur ce même passage, qui renforce le point 2 : en 3a,
-`dsh` a cette fois signalé lui-même *"j'ai rencontré une difficulté avec
-le contrôle qualité"* avant de se rabattre sur une vérification
-manuelle — plus honnête que l'affirmation sans réserve du round
-précédent, mais ça confirme que l'étape échoue ou est esquivée plutôt
-qu'exécutée jusqu'au bout.
-
-### Round 8 — rendre le contrôle qualité contraignant et traçable
-
-Décision prise (pas à l'aveugle, après constat du point 2) : plutôt que
-d'accepter la limite, renforcer les deux skills de contrôle pour qu'un
-modèle local de taille modeste les suive réellement. Constat de départ :
-ce genre de modèle suit plus fidèlement une instruction "exécute cette
-commande" qu'une instruction "termine ta réponse par cet objet JSON
-précis" — le second a été ignoré à chaque test réel jusqu'ici, alors que
-le premier est un geste mécanique unique.
-
-**Ajouté** : `04-scripts/consigner-verdict-qualite.js`, étape finale
-*obligatoire* (nouvelle section dans `skill-controleur-qualite.md` et
-`skill-controleur-de-controle.md`, intitulée "NE SAUTE JAMAIS CETTE
-ÉTAPE") — une seule commande bash qui transforme le verdict en événement
-loggé via `dsh-logger.js`, avec exactement les noms de composant
-(`controleur-qualite`, `controleur-de-controle`) que la section 4 de
-`suite-tests-reelle.sh` compte déjà depuis le début : le "0 occurrence"
-systématique pour ces deux-là devrait enfin devenir un vrai signal
-d'engagement une fois cette étape suivie.
-
-```bash
-node 04-scripts/consigner-verdict-qualite.js --composant controleur-qualite --statut VALIDE|INVALIDE|A_VERIFIER [--score 0-10] --commentaire "résumé en une phrase"
-```
-
-Périmètre volontairement restreint, même logique que `auto-implementer.js` :
-`--composant` limité aux deux valeurs ci-dessus, `--statut` limité aux
-trois valeurs attendues, `--score` validé entre 0 et 10 — refusé avant
-tout log sinon.
-
-Testé : les 4 cas de rejet (composant/statut/score/commentaire invalides),
-les 2 cas valides (`controleur-qualite`/VALIDE avec score,
-`controleur-de-controle`/A_VERIFIER sans score), contenu exact du
-JSONL vérifié. **Pas encore testé en conditions réelles** : reste à
-relancer `suite-tests-reelle.sh` pour voir si le modèle suit effectivement
-cette nouvelle étape — c'est une instruction plus simple à exécuter qu'à
-ignorer, mais ça reste une hypothèse tant que ce n'est pas confirmé sur
-la vraie machine.
-
-### Round 9 — le round 8 n'avait jamais été vraiment testé : chemin de skills périmé
-
-Premier passage réel du round 8 : toujours 0 occurrence pour
-`controleur-qualite`. Un test ciblé `--json` a montré pourquoi — pas une
-histoire de modèle qui ignore la consigne, cette fois : le `tool_result`
-du `tool_call` `"tool":"skill","name":"controle-qualite"` renvoyait
-encore le **contenu d'avant le round 8**, sans la section "Consignation
-obligatoire". Révélateur dans le même résultat :
-```
-Base directory for this skill: /Users/jarvis/.../IAlocale-claude-determined-pasteur-50jhkd/01-skills
-```
-— l'ANCIEN dossier (celui d'avant le reclonage du round 7), pas
-`IAlocale-git`.
-
-Cause : `configurer-skills-dsh.sh` **ajoutait** à `customSkillDirs` au
-lieu de remplacer. Après le reclonage, la liste contenait les deux
-chemins (`[..."-claude-determined-pasteur-50jhkd/01-skills",
-".../IAlocale-git/01-skills"]`) — les deux dossiers déclarant un skill du
-même nom (`controle-qualite`), `dsh` semble servir celui du **premier**
-chemin de la liste, resté périmé. Autrement dit : le round 8 n'avait
-jamais été réellement exercé, le modèle recevait encore les anciennes
-instructions sans la nouvelle étape obligatoire.
-
-**Corrigé** : `configurer-skills-dsh.sh` remplace maintenant
-`customSkillDirs` par un tableau à une seule entrée (le chemin courant)
-au lieu d'y ajouter — ce projet n'a jamais qu'un seul checkout actif à la
-fois, il n'y a donc aucune raison légitime d'en accumuler plusieurs.
-Testé contre un faux `~/.dsh/profiles/` avec deux anciens chemins déjà
-présents : les deux sont bien retirés, un seul chemin (le courant)
-survit.
-
-**Confirmé juste après, en conditions réelles** : une fois
-`configurer-skills-dsh.sh` relancé (chemin purgé) et un nouveau test
-ciblé `--json` lancé, le skill chargé contenait bien la section 5 du
-round 8 — et cette fois, `dsh` a réellement exécuté, via l'outil bash :
-```
-node 04-scripts/consigner-verdict-qualite.js --composant controleur-qualite --statut VALIDE --score 9.5 --commentaire "..."
-```
-avec un `tool_result` confirmant le log écrit. **Le mécanisme du round 8
-fonctionne, confirmé de bout en bout pour la première fois.** Détail
-cosmétique sans gravité observé sur ce même passage : la réponse finale
-du modèle se termine par un `<tool_call>` résiduel (un appel d'outil
-amorcé juste avant la fin du tour) — artefact du modèle, pas un bug de
-ces scripts.
-
-Reste à confirmer : que `controleur-de-controle` (second niveau, jamais
-testé isolément) suit la même discipline, et qu'un passage complet de
-`suite-tests-reelle.sh` (pas seulement un test ciblé) fait enfin
-apparaître un vrai signal en section 4.
-
-### Où ça en est
-
-Les quatre blocages qui empêchaient toute validation réelle sont levés
-(round 5 : serveur sain ; round 6 : skills visibles ; round 7 :
-confabulation infirmée, git réparé par reclonage ; round 8 : contrôle
-qualité rendu contraignant). Round 9 a trouvé et corrigé un bug qui
-invalidait silencieusement le test du round 8 (chemin de skills périmé
-après reclonage), **puis confirmé en conditions réelles que le mécanisme
-de consignation obligatoire fonctionne** : premier verdict de
-`controleur-qualite` réellement loggé, de bout en bout, sur la vraie
-machine. Reste à vérifier sur un passage complet du protocole plutôt
-qu'un test ciblé, et à confirmer `controleur-de-controle` séparément.
-
-### Round 10 — un vrai bug trouvé en section 5, un doute ouvert en section 4
-
-Premier passage complet (pas juste un test ciblé) depuis les correctifs
-du round 9. Deux constats :
-
-1. **Section 4 : toujours 0 occurrence pour `controleur-qualite`**, alors
-   que les deux réponses 3a/3b affirment un contrôle qualité réussi
-   ("score de 10/10", "validé avec succès"). Sans `--json` pour ces deux
-   appels précis, impossible de confirmer si `consigner-verdict-qualite.js`
-   a vraiment été exécuté cette fois — mais une hypothèse concrète
-   existe : `dsh-logger.js` résout son fichier de log via la variable
-   d'environnement `HARNESS_HOME` (`$HARNESS_HOME/logs/pipeline.jsonl`,
-   sinon `~/dsh-harness/logs/pipeline.jsonl` par défaut).
-   `suite-tests-reelle.sh` exporte bien `HARNESS_HOME` dans son propre
-   shell, mais si l'outil bash de `dsh` exécute les commandes dans un
-   environnement assaini (plausible pour un sandbox), cette variable ne
-   serait jamais transmise au process qui lance
-   `consigner-verdict-qualite.js` depuis l'intérieur de `dsh` — auquel cas
-   le verdict serait bien consigné, mais dans
-   `~/dsh-harness/logs/pipeline.jsonl`, jamais relu par la section 4 du
-   script (qui lit le `logs/` du dépôt). **Pas encore vérifié** : reste à
-   inspecter ce fichier sur la machine réelle pour trancher.
-
-2. **Section 5 : un vrai bug trouvé, corrigé.** `git commit` échouait
-   avec "Commande git inattendue" quand la proposition de test
-   reproposait un contenu byte-pour-byte identique à ce qui existait déjà
-   (le fichier de test avait été restauré via `git checkout --` plutôt
-   que supprimé, lors d'un round précédent) — `git add` ne stage rien
-   dans ce cas, et `git commit` échoue légitimement avec "nothing to
-   commit", traité à tort comme une erreur inattendue. **Corrigé** :
-   `auto-implementer.js` détecte maintenant ce cas via
-   `git diff --cached --quiet` avant de committer, et renvoie un nouveau
-   statut `DEJA_A_JOUR` (branche temporaire nettoyée, rien fusionné,
-   sortie en code 0) plutôt que de planter. Testé contre un dépôt git
-   jetable : premier passage fusionne normalement, second passage avec le
-   même contenu renvoie `DEJA_A_JOUR` sans erreur, un seul commit de
-   fusion dans l'historique (pas de doublon).
-
-### Round 11 — hypothèse `HARNESS_HOME` confirmée, et un effet de bord du crash du round 10 trouvé
-
-`cat ~/dsh-harness/logs/pipeline.jsonl` sur la vraie machine : **1
-occurrence** de `controleur-qualite`. Hypothèse du round 10 confirmée :
-le verdict est bien consigné par `consigner-verdict-qualite.js`, mais
-dans `~/dsh-harness/logs/` (repli par défaut de `dsh-logger.js`) plutôt
-que dans `logs/` du dépôt — l'outil bash de `dsh` n'hérite pas de
-`HARNESS_HOME` exporté par `suite-tests-reelle.sh`. **Pas corrigé ici** :
-une solution robuste demanderait soit que `consigner-verdict-qualite.js`
-calcule son propre `HARNESS_HOME` depuis l'emplacement du script plutôt
-que de dépendre d'une variable d'environnement (changerait aussi le
-comportement de `dsh-logger.js` partagé par tous les autres scripts),
-soit que `dsh` transmette les variables d'environnement à son outil
-bash — aucune des deux n'est une correction locale sûre sans plus
-d'investigation sur l'impact pour le reste du projet.
-
-Effet de bord trouvé en creusant cette même sortie : la section 5
-démarrait "depuis 'auto-amelioration/2026-10-06T07-17-53-175Z'" — pas la
-vraie branche de l'utilisateur. Cause : le crash du round 10 (avant son
-correctif) a planté *pendant* un cycle, alors que le dépôt était déjà
-basculé sur une branche temporaire — le chemin `catch` générique de
-`main()` logue l'erreur et quitte, mais ne fait jamais le `git checkout`
-de retour vers la branche d'origine (seul le chemin "proposition
-rejetée" le fait explicitement). Le cycle suivant repartait donc de
-cette branche temporaire au lieu de la vraie branche, risquant d'empiler
-des branches temporaires les unes sur les autres indéfiniment.
-
-**Corrigé** : `auto-implementer.js` détecte maintenant si `HEAD` est déjà
-sur une branche `auto-amelioration/*` au démarrage et refuse
-explicitement de continuer, avec un message qui dit quoi faire (revenir
-sur la vraie branche, supprimer la branche orpheline) — plutôt que
-d'empiler silencieusement. Testé contre un dépôt git jetable démarré
-directement sur une branche `auto-amelioration/test-orpheline` : refus
-confirmé, `HEAD` inchangé.
-
-**À faire côté utilisateur, en priorité** : vérifier sur quelle branche
-le dépôt se trouve réellement maintenant (`git branch`), revenir sur
-`claude/determined-pasteur-50jhkd` si nécessaire, et supprimer toute
-branche `auto-amelioration/*` orpheline qui aurait pu s'accumuler.
-Confirmé sans casse sur la vraie machine : une seule branche orpheline
-trouvée, nettoyage réussi.
-
-### Round 12 — un outil hors sujet câblé sur l'API cloud DeepSeek fait dérailler le modèle
-
-Branches nettoyées, protocole complet relancé. Sections 1, 2 et 5 toujours
-solides (`DEJA_A_JOUR`/`REJETEE` comme attendu). **Nouveau mode de panne
-en section 3**, jamais vu en 11 tours précédents : sur les tâches HTML5 et
-WordPress (qui ne demandent aucune recherche web), le modèle a tenté
-d'appeler un outil `web_search`, échoué, puis dérapé en texte incohérent
-— jusqu'à une syntaxe d'appel d'outil invalide en 3b
-(`<function=web_search>...`) sur une question sans rapport
-("what is the capital of France").
-
-⚠️ Le texte produit par le modèle suggérait de "mettre à jour
-`DEEPSEEK_SEARCH_BASE_URL` vers une base Messages API compatible
-Anthropic avec des crédits suffisants" — **une suggestion à ne surtout
-pas suivre telle quelle** : c'est la sortie confuse d'un modèle qui vient
-de planter sur un vrai problème, pas une recommandation de configuration
-fiable.
-
-Cause confirmée via `dsh --profile headless --dump-config | grep -i search` :
-```yaml
-- id: web
-  config: { searchProvider: deepseek-official }
-- id: web-search-deepseek
-  config: { apiKeyEnv: DEEPSEEK_API_KEY }
-- id: tool-web
-  config: { fetch: true, searchTimeoutMs: 60000 }
-```
-`tool-web` est natif du profil `headless` (jamais installé par ce
-projet) et expose au modèle un outil de recherche web câblé en dur sur
-l'API cloud DeepSeek — directement contraire au principe "aucune API
-cloud pour le fonctionnement quotidien" de ce projet. `env | grep -i
-deepseek` confirme `DEEPSEEK_API_KEY` absente (cohérent avec une
-installation 100% locale) : tout appel à cet outil échoue donc
-systématiquement, et un modèle local de taille modeste gère mal cet
-échec plutôt que de simplement l'ignorer.
-
-**Corrigé** : nouveau script `04-scripts/desactiver-recherche-web-cloud.sh`,
-qui désactive `tool-web` (`disabled: true`) sur les profils
-`headless`/`web` — retire l'outil de la liste proposée au modèle plutôt
-que d'espérer qu'il ne l'appelle jamais. Même mécanisme de fusion sûre
-que `configurer-skills-dsh.sh` (préserve le commentaire d'en-tête, refuse
-si un vrai `!!js` est détecté). Testé contre un faux `~/.dsh/profiles/` :
-ajout d'une nouvelle entrée quand `tool-web` est absent, préservation de
-la config existante plus ajout de `disabled: true` quand il est déjà
-présent, idempotent sur deux passages.
-
-**Confirmé en conditions réelles** — avec une fausse alerte en cours de
-route qui vaut la peine d'être documentée : un premier
-`dsh --dump-config | grep -A3 "id: tool-web"` semblait montrer
-`tool-web` toujours actif (`config: {fetch: true}`, pas de `disabled`).
-Panique prématurée : `disabled: true` apparaît en réalité 5 lignes après
-le match, hors de la fenêtre `-A3` demandée. Avec plus de contexte
-(`sed -n` sur une plage plus large), confirmé sans ambiguïté :
-```yaml
-# == @deepseek-ai/dsh-base, patched by .../cordis.patch.yml
-- id: tool-web
-  config:
-    fetch: true
-    searchTimeoutMs: 60000
-  disabled: true
-```
-Le marqueur `# == @deepseek-ai/dsh-base, patched by ...` confirme que
-c'est bien la vue fusionnée (config de base + notre patch) — le
-mécanisme fonctionne exactement comme prévu dès le premier essai, rien à
-corriger. Leçon de méthode pour la suite : demander assez de contexte
-(`-A` large, ou `sed`/`cat` sans limite) avant de conclure qu'un
-correctif n'a pas pris effet.
-
-Entre-temps, un symptôme sans rapport est réapparu sur cette même
-machine : le crash GPU Metal du round 4/5
-(`iogpu.wired_limit_mb` revenu à `0`, `Insufficient Memory`), very
-probablement causé par un redémarrage ou une mise en veille de la
-machine entre deux sessions de test — ce réglage ne survit jamais à un
-reboot, déjà documenté. Résolu en relançant simplement
-`./04-scripts/setup-local-model.sh`, comme prévu depuis le round 5.
-Confirmé par `ollama run ... "Dis juste bonjour."` → `Bonjour ! 😊`.
-
-### Round 13 — `suite-tests-reelle.sh` affirme désormais des résultats, au lieu de seulement les décrire
-
-Après 12 rounds à relire le texte du script pour juger à l'œil si un
-résultat était bon, le script fait maintenant le travail lui-même.
-Nouveaux contrôles, qui font échouer le script (code de sortie 1) plutôt
-que de se contenter d'informer — chacun correspond à une régression
-réellement rencontrée dans les rounds précédents :
-
-- **A.1** : `ollama ps` montre bien 32768 de contexte (round 4 : servait
-  4096 sans rien signaler).
-- **A.2** : `iogpu.wired_limit_mb` ≠ 0 (round 4/5/12 : revient à 0 après
-  chaque redémarrage, cause du crash GPU Metal).
-- **A.3** : `dsh` voit les skills du dépôt, pas seulement ses ID internes
-  (round 6/9 : `customSkillDirs` périmé après un reclonage).
-- **A.4** : l'outil de recherche web cloud est désactivé (round 12 :
-  câblé sur l'API DeepSeek, jamais utile en local).
-- **C.7** : un *nouveau* verdict `controleur-qualite` a bien été
-  consigné sur les tâches 3a/3b (compare un compte "avant"/"après" dans
-  les deux emplacements possibles — dépôt et repli `~/dsh-harness/`, voir
-  round 11 — plutôt que de se fier au texte de `dsh`).
-- **D.14** : aucune syntaxe d'appel d'outil malformée (`<function=`,
-  `<tool_call>` résiduel...) n'a fuité dans le texte final de 3a/3b — le
-  glitch rencontré lors du dernier passage réel.
-
-Bug trouvé et corrigé en testant ces contrôles avant de les livrer (contre
-un faux dépôt avec `dsh`/`ollama` simulés, jamais la vraie machine depuis
-cet environnement) : `grep -c motif fichier 2>/dev/null || echo 0`
-imprime **"0"** ET sort en code 1 quand le fichier existe avec zéro
-correspondance — le `|| echo 0` se déclenchait quand même, doublant la
-sortie capturée (`"0\n0"`) et cassant l'arithmétique du delta
-avant/après. Remplacé par le pattern déjà utilisé ailleurs dans ce script
-(`grep -o ... | wc -l`), qui n'a pas ce défaut. Testé : un scénario où
-tout doit passer (0 échec, code 0) et un scénario où les 5 contrôles
-doivent simultanément détecter un vrai problème injecté (5 échecs, code
-1) — les deux confirmés avant de pousser.
-
-**Pas encore confirmé en conditions réelles** : ces contrôles n'ont
-tourné que contre un dépôt jetable avec `dsh`/`ollama` simulés depuis cet
-environnement — jamais la vraie machine.
-
-### Round 14 — premier passage complet des contrôles A/C.7/D.14 en conditions réelles
-
-Premier vrai lancement de `suite-tests-reelle.sh` depuis la machine
-réelle (round 13 ne les avait vérifiés que contre un dépôt jetable).
-Bilan : 5 échecs, mais tous expliqués — aucun n'est une régression du
-refactor de portabilité qui précède ce round (`config.js`,
-`moteur-laya.js`, résolution du modèle par défaut) : ces contrôles
-testent `dsh`/Ollama eux-mêmes, pas le code JS/shell qui vient d'être
-réorganisé.
-
-**✅ Confirmé pour la première fois, et c'est la bonne nouvelle du
-round** : les sections 1 et 2 passent proprement. `decision-rapide.js`
-(moteur `ollama`) vient de tourner contre un vrai Ollama pour la
-première fois — 3 décisions réelles (code/juridique/comptable), 856 ms à
-1846 ms chacune, confiance 0.9-0.95, JSON conforme au schéma à chaque
-fois. Le commentaire d'en-tête de `decision-rapide.js` qui disait
-"non testé contre un vrai Ollama" est maintenant corrigé en conséquence.
-A.4 (tool-web désactivé) passe aussi : le correctif du round 12 tient
-toujours.
-
-**❌ A.1/A.2 — déjà connu, pas une régression** : `iogpu.wired_limit_mb`
-revenu à 0 et contexte servi à 4096 au lieu de 32768. Exactement le
-symptôme des rounds 4/5/12 : ces deux réglages ne survivent jamais à un
-redémarrage ou une mise en veille de la machine, et `setup-local-model.sh`
-n'avait pas été relancé depuis. **Correctif inchangé** : relancer
-`./04-scripts/setup-local-model.sh` (sans argument : résout maintenant
-le modèle par défaut depuis `05-configs/modeles.yaml`, voir la section
-"Portabilité" plus haut).
-
-**❌ A.3 et 3a/3b — une vraie piste, pas encore confirmée.** Les deux
-donnent une réponse de `dsh` totalement hors sujet, qui mentionne des
-noms d'outils/skills qui n'existent nulle part dans ce dépôt
-(`todo_write`, `razor-qa`, un tool "load") — pas le symptôme déjà
-documenté (un `<tool_call>` résiduel en fin de réponse par ailleurs
-correcte), mais une réponse entière sans rapport avec la question posée.
-Deux pistes, pas confondues :
-- **Pour 3a/3b** : explicable en grande partie par un avertissement que
-  le script affichait déjà juste avant — `AUTORISER_ECRITURE_HEADLESS`
-  n'était pas positionné, donc l'écriture de fichiers demandée
-  (page HTML5, thème WordPress) restait bloquée par `approval.policy=ask`
-  sans personne pour répondre en headless. Un agent bloqué sur une
-  approbation qu'il ne peut pas obtenir peut plausiblement partir sur
-  autre chose plutôt que d'échouer proprement. **Prochain test concret** :
-  relancer avec `AUTORISER_ECRITURE_HEADLESS=1 ./04-scripts/suite-tests-reelle.sh`
-  (accepte la mise en garde de `skill-decision-rapide.md` : ça désactive
-  le sandbox, pas seulement l'approbation) et voir si 3a/3b réussissent
-  réellement une fois l'écriture débloquée.
-- **Pour A.3**, cette explication ne suffit pas : la question ("Liste
-  les skills que tu as à disposition.") ne demande aucune écriture, donc
-  aucune approbation à bloquer — et la réponse part quand même sur une
-  tâche sans rapport ("Research the impact of AI on society" via un
-  outil de todo). **Hypothèse à vérifier, pas encore testée** : un état
-  de conversation qui persiste entre deux invocations séparées de
-  `dsh --profile headless` (un profil qui garderait un historique plutôt
-  que de repartir à zéro à chaque appel), qui ferait déraper une
-  question simple si un appel précédent sur ce même profil avait laissé
-  un contexte inachevé. **Prochain test concret** : relancer exactement
-  `dsh --profile headless --json "Liste les skills que tu as à
-  disposition."` isolément, juste après un `dsh --profile headless
-  --new` (ou l'équivalent qui repart d'un historique vide) si cette
-  option existe, pour voir si la réponse reste cohérente hors du script
-  complet.
-
-**❌ D.14 et C.7 — conséquences directes de 3a/3b, pas des échecs
-indépendants.** D.14 détecte exactement la syntaxe d'appel d'outil
-malformée produite par 3a/3b ci-dessus (fonctionne comme prévu — c'est
-le contrôle qui est censé la détecter). C.7 ne trouve aucun nouveau
-verdict `controleur-qualite` parce qu'aucune tâche 3a/3b n'est allée
-jusqu'au contrôle qualité. Les deux devraient repasser au vert dès que
-3a/3b réussissent réellement (voir piste `AUTORISER_ECRITURE_HEADLESS`
-ci-dessus).
-
-**❌ 5a/5b — le script a eu raison de refuser, pas un bug.**
-`auto-implementer.js` refuse volontairement de tourner sur un arbre de
-travail qui n'est pas propre (`git status --porcelain` non vide), pour
-ne jamais embarquer un travail en cours sans rapport dans un commit
-d'auto-amélioration — c'est le comportement voulu, testé et documenté
-dès sa conception. Sur cette machine, le dépôt avait un dossier `src/`
-non suivi au moment du test. **Pour tester réellement 5a/5b** : repartir
-d'un arbre propre (`git stash -u`, ou trancher ce que `src/` doit
-devenir) avant de relancer `suite-tests-reelle.sh`.
-
-**Reste ouvert** : confirmer A.3 isolément, confirmer 3a/3b avec
-`AUTORISER_ECRITURE_HEADLESS=1`, puis D.14/C.7/5a/5b devraient se
-résoudre en cascade plutôt qu'individuellement.
-
-### Round 15 — cause racine confirmée : un contexte tronqué dégrade l'appel d'outils, pas une contamination entre sessions
-
-Les trois pistes ouvertes au round 14 ont été tranchées avec une preuve
-directe, pas juste un raisonnement.
-
-**La preuve, dans une trace `--json` isolée.** La même question
-("Liste les skills que tu as à disposition.") posée deux fois, à deux
-contextes Ollama différents :
-
-- **Contexte 4096** (réglage jamais réappliqué depuis un redémarrage,
-  A.1/A.2 en échec) : le modèle appelle l'outil `skill` avec
-  `{"skill_name":"controle-qualite"}` — mauvaise clé. L'erreur renvoyée
-  dit explicitement `missing required property "name"`. Il recommence
-  **5 fois**, avec 5 noms de skill différents, en gardant chaque fois la
-  même clé fausse `skill_name`, sans jamais se corriger malgré un
-  message d'erreur qui nomme littéralement le bon champ. Après le 5e
-  échec, il abandonne et part sur un texte inventé sans rapport
-  (`subagent_fork`, "Analyze LLM safety mechanisms"). Round 14 avait vu
-  deux hallucinations différentes sur cette même question
-  (`fake_data_generator.py`, puis "Research the impact of AI on
-  society") — **pas une contamination d'historique entre appels**
-  (`~/.dsh/profiles/headless/` ne contient aucun fichier de session,
-  vérifié), mais la même dégradation qui produit chaque fois un
-  résultat différent selon où le raisonnement du modèle part en vrille.
-- **Contexte 32768** (après un simple
-  `./04-scripts/setup-local-model.sh`) : réponse parfaite à la première
-  tentative, les 24 skills du dépôt listés avec leur description exacte
-  — **sans même avoir besoin d'appeler l'outil `skill`**, directement
-  depuis ce que le modèle garde présent dans son contexte. Le paramètre
-  `name` (confirmé correct par une trace du round 7/9) n'est d'ailleurs
-  plus jamais mal orthographié une fois le contexte rétabli.
-
-**Conclusion** : un contexte tronqué à 4096 tokens (au lieu des 32768
-configurés) ne fait pas juste "répondre plus court" — il semble faire
-perdre au modèle le schéma exact des outils disponibles (~14 700 tokens
-de catalogue, voir section "Optimisation Mac Mini M4"), ce qui dégrade
-sa capacité à les appeler correctement et le fait déraper vers des
-réponses sans rapport une fois qu'il échoue en boucle. C'est la cause
-racine commune des échecs A.3/3a/3b/D.14/C.7 du round 14 — pas 5
-problèmes indépendants.
-
-**Confirmé par un passage complet de `suite-tests-reelle.sh` après le
-correctif** : 6 échecs → 1 seul. A.1/A.2/A.3/A.4 passent. **C.7 passe
-pour la première fois via le script automatique complet** (pas
-seulement un test ciblé comme au round 9) : un vrai verdict
-`controleur-qualite` consigné sur une tâche réelle. 3b (thème WordPress)
-est un succès vérifié de bout en bout — les 3 fichiers attendus
-existent bien sur disque, `style.css` contient le bon en-tête `Theme
-Name: test`. 5a/5b se comportent exactement comme conçus : 5a fusionne
-une proposition valide, 5b rejette une proposition invalide
-(`modifier-script` non autorisé) avant toute écriture.
-
-**Ce qui reste, et qui n'est PAS le glitch bénin du round 7** : 3a (page
-HTML5) échoue encore à D.14, mais cette fois `test-html5.html`
-**n'existe pas du tout** sur disque — vérifié directement. Contrairement
-au round 7 (où l'artefact de fin de tour survenait APRÈS une tâche déjà
-réussie, donc cosmétique), ici le modèle annonce l'intention ("Je vais
-créer...") puis tente directement d'appeler `controle-qualite` — avec
-la bonne clé `name` cette fois, mais en syntaxe brute non exécutée — **sans
-jamais créer le fichier**.
-
-**Correction après un 3e passage (même session, contexte toujours à
-32768, confirmé) : le correctif du round 15 n'explique pas tout.** Avec
-un contexte sain ET l'écriture autorisée sur deux passages consécutifs :
-- **3a (page HTML5) : 0 succès sur 3 tentatives réelles**, à chaque fois
-  avec un outil fabriqué différent, qui n'existe nulle part dans ce
-  dépôt (vérifié par recherche dans `01-skills/`/`03-workflows/`) :
-  `todo_write` (round 14, contexte dégradé), rien d'identifiable (round
-  15, contexte sain), puis `update_goal` avec un id de toute évidence
-  factice (`g-1234567890`) sur ce 3e passage, contexte toujours sain.
-- **3b (thème WordPress) : 1 succès sur 2 tentatives** une fois le
-  contexte corrigé — réussi au round 15, mais a échoué au 3e passage
-  (le modèle décrit son intention puis émet l'appel `bash` du `mkdir`
-  en texte brut au lieu de l'exécuter — aucun fichier créé, confirmé).
-
-**Conclusion révisée** : le contexte tronqué était une cause racine
-réelle et confirmée pour A.1/A.2/A.3 (fiable sur les 3 passages depuis
-le correctif), mais **pas** la seule cause de D.14 — cette syntaxe
-d'appel d'outil malformée en fin de tour reste un problème ouvert,
-reproductible même à contexte sain, pas encore expliqué. 3a échoue de
-façon stable (3/3) quelle que soit la cause déjà écartée (ni contexte,
-ni accès écriture) — un indice plus solide qu'un aléa isolé.
-
-### Round 16 — répétition minimale et isolée du glitch : hors contexte, hors mauvaise clé
-
-La consigne 3a (exactement celle de `suite-tests-reelle.sh`, mais
-sauvegardée hors du dépôt dans `/tmp` pour isoler complètement le test)
-relancée seule, sans rien d'autre autour :
-```
-dsh --profile headless --json "Cree une page HTML5 complete et valide avec un titre, un paragraphe de description et un bouton. Sauvegarde-la dans /tmp/isole-3a/test-html5.html. Avant de considerer la tache terminee, fais verifier le resultat par le controle qualite."
-```
-
-Toute la réponse (un seul événement `text`, 73 tokens de sortie) :
-```
-<function=skill><parameter=name>personnalite-et-sagesse</parameter></function></tool_call>
-<function=skill><parameter=name>consulter-sagesse-interne</parameter></function></tool_call>
-<function=skill><parameter=name>analyse-objectifs</parameter></function></tool_call>
-```
-
-Trois tentatives, chacune syntaxiquement correcte cette fois (bon
-paramètre `name`, contrairement à `skill_name` au round 15) —
-**et pourtant aucune des trois n'apparaît comme un vrai `tool_call`
-dans la trace JSON** : pas un seul `{"type":"tool_call",...}`, là où
-les traces précédentes montraient au moins des tentatives réellement
-dispatchées (même avec la mauvaise clé). Le tour se termine
-(`turn_end`, `reason: completed`) sans jamais toucher à la vraie tâche
-— pas de fichier créé, rien.
-
-**Ça écarte les deux hypothèses précédentes comme explication
-complète** : contexte sain (32768, confirmé par le round précédent),
-syntaxe correcte, et le glitch persiste quand même, sous sa forme la
-plus épurée observée jusqu'ici. **Nouvelle hypothèse, pas encore
-confirmée** : `dsh` ne reconnaîtrait fiablement qu'un seul appel
-d'outil par tour — quand le modèle en enchaîne plusieurs d'affilée dans
-une même réponse avant de rendre la main (ici 3 d'un coup), le parseur
-de template ne les détecte plus du tout, et tout retombe en texte brut
-plutôt qu'en appels exécutés. Les trois skills tentés
-(`personnalite-et-sagesse`, `consulter-sagesse-interne`,
-`analyse-objectifs`) ne sont pas absurdes comme réaction à la consigne
-— `analyse-objectifs` est même une vraie bonne première étape d'après
-sa propre description — donc l'intention du modèle est plausible ;
-c'est l'exécution côté `dsh` qui casse.
-
-**Reste à faire pour confirmer ou infirmer cette hypothèse** : relancer
-exactement la même consigne isolée contre un modèle d'une autre famille
-déjà présent dans `ollama list` (ex. `mistral-small3.2`, pas de la
-famille Qwen3) via `./04-scripts/setup-local-model.sh
-mistral-small3.2:latest` puis le même appel `--json`. Si le glitch
-disparaît avec un autre modèle, c'est spécifique à la façon dont
-`qwen3-coder` formate ses appels d'outils multiples. S'il persiste,
-c'est bien `dsh` lui-même qui ne gère pas plusieurs appels d'outils en
-une seule réponse, quel que soit le modèle — pas encore testé, à faire
-avant de conclure.
-
-### Round 17 — même consigne contre `mistral-small3.2` : le glitch de template disparaît, mais une autre limite apparaît
-
-Une incidente d'abord, sans rapport avec le fond : le premier essai
-contre `mistral-small3.2` a échoué avec `UNKNOWN_MODEL` (le profil
-`headless` réclamait encore `qwen3-coder`). Pas un bug de nos scripts —
-`~/.dsh/profiles/headless/cordis.patch.yml` se régénère depuis la
-config globale à chaque lancement de `dsh`, et affichait déjà le bon
-modèle (`mistral-small3.2:latest`, contexte 32768) dès l'appel suivant.
-Juste un essai relancé une seconde fois trop tôt après le changement de
-modèle.
-
-**La vraie comparaison, une fois corrigée.** Avec `mistral-small3.2`, le
-glitch de template du round 16 (texte brut jamais reconnu comme
-`tool_call`) **n'apparaît pas** : tous les appels sont correctement
-structurés et dispatchés par `dsh` — confirme que ce glitch précis est
-propre à la façon dont `qwen3-coder` formate ses appels, pas une
-limite générale de `dsh`.
-
-Mais la tâche échoue quand même, pour une raison différente :
-1. `mistral-small3.2` appelle d'abord `create_goal` (un vrai outil
-   `dsh`, pas une invention — ça confirme rétrospectivement que les
-   `update_goal`/`todo_write` vus aux rounds 14/15 avec `qwen3-coder`
-   n'étaient pas de pures hallucinations, mais des tentatives
-   déformées du **même** mécanisme réel de suivi d'objectif). Réussit.
-2. Il rédige le HTML5 correctement (code valide, titre, paragraphe,
-   bouton).
-3. Il appelle l'outil `write` avec `{"path": "...", "content": "..."}`
-   — mais le vrai paramètre attendu est `file_path`, pas `path`.
-   L'erreur le dit explicitement : `missing required property
-   "file_path"`.
-4. **Il n'essaie jamais une seconde fois avec la bonne clé** — il
-   décrit son plan en prose sur deux tours de plus ("je vais créer le
-   dossier, puis sauvegarder le fichier...") sans jamais relancer
-   l'appel, et le tour se termine sans fichier créé.
-
-**Constat qui dépasse le seul `qwen3-coder`** : les deux modèles testés
-devinent une mauvaise clé de paramètre pour un outil (`skill_name` vs
-`name` pour l'un, `path` vs `file_path` pour l'autre), et **aucun des
-deux ne se corrige après avoir reçu un message d'erreur qui nomme
-pourtant explicitement le bon champ**. Changer de modèle ne fait pas
-disparaître l'échec de la tâche 3a — il change seulement la façon dont
-elle échoue (glitch de template invisible pour `qwen3-coder`, erreur
-réelle mais jamais corrigée pour `mistral-small3.2`). Pas une piste à
-creuser davantage par simple changement de modèle : les deux modèles
-locaux disponibles ici échouent sur cette tâche précise, pour des
-raisons différentes mais avec le même symptôme final (pas de fichier).
-
-**Remis `qwen3-coder` en modèle actif après ce test** (celui recommandé
-par défaut, voir section "Modèles interchangeables") :
-```bash
-./04-scripts/setup-local-model.sh qwen3-coder:30b-a3b-q4_K_M
-```
-
-**Question légitime à ce stade : qu'est-ce qui a changé entre les
-rounds 10-13 (3a semblait réussir) et maintenant (3a échoue
-systématiquement) ?** Vérifié : `dsh --version` est toujours
-`0.1.7-rc.2`, identique aux tout premiers rounds — pas de mise à jour
-de `dsh` en cause. `ollama --version` (`0.40.0` actuellement) n'avait
-jamais été noté dans les rounds précédents, donc une mise à jour
-silencieuse d'Ollama entre-temps ne peut pas être exclue formellement,
-faute de point de comparaison.
-
-Mais une explication plus simple, et directement vérifiée cette
-session, suffit à elle seule : **au round 10, "3a a réussi" reposait
-uniquement sur le texte final du modèle** ("score de 10/10", "validé
-avec succès") — personne n'avait vérifié que `test-html5.html`
-existait réellement sur disque, seul le comptage des logs (section 4)
-était en doute à l'époque. Cette session a prouvé, trois fois, avec
-deux modèles différents (round 15 passage 2, round 16, round 17), que
-cette confiance dans le texte final n'est pas fondée : le modèle peut
-affirmer un succès alors que rien n'a été écrit. Le contrôle D.14
-(round 13) et les vérifications manuelles de fichiers (cette session)
-sont des ajouts récents au protocole de test, pas le bug lui-même —
-3a n'a probablement jamais été fiable, simplement personne ne l'avait
-encore vérifié d'assez près pour s'en apercevoir.
-
-### Round 18 — 3a réussit enfin pour de vrai ; `dsh` mis à jour ; contenu personnel ajouté
-
-**Premier succès complet et vérifié de 3a.** Un nouveau passage de
-`suite-tests-reelle.sh` (toujours `qwen3-coder`, contexte sain) montre
-3a réussir intégralement : fichier `test-html5.html` réellement créé,
-contrôle qualité exécuté, **et C.7 consigne 2 nouveaux verdicts** (contre
-1 lors du précédent succès partiel) — cette fois c'est 3b qui échoue
-avec le glitch `update_goal` déjà vu au round 15. **Ça corrige la
-lecture trop catégorique du round 17** ("3a : 0 succès sur 3
-tentatives") : sur l'ensemble des passages réels de cette session, les
-deux tâches ont chacune déjà réussi et déjà échoué au moins une fois —
-le bon résumé est "intermittent sur les deux", pas "3a cassé, 3b
-fiable" ni l'inverse. Pas encore assez de passages pour chiffrer un
-vrai taux de réussite.
-
-**`dsh` mis à jour, le terrain change à partir d'ici.** Tous les rounds
-1 à 17 ont tourné contre `0.1.7-rc.2`. À l'occasion de l'investigation
-sur la fluidité de l'interface web (texte/focus qui se comportait mal),
-`dsh` a été mis à jour vers `0.2.0-rc.2` puis `0.2.1-alpha.1` — cette
-dernière touche justement l'éditeur de prompt (texte multiligne,
-gestion clavier). **Tout round documenté à partir d'ici reflète cette
-nouvelle version**, pas celle des rounds précédents — à garder en tête
-si un comportement déjà caractérisé (le glitch de template, par
-exemple) semble changer : la version de `dsh` a changé en même temps.
-Pas encore confirmé si la fluidité de l'interface web s'est améliorée.
-
-**`06-data/personnalite/` et `06-data/sagesse/citations-sages/` ne sont
-plus vides.** Contenu personnel ajouté directement par l'utilisateur
-(cahiers, méthode, clés relationnelles, citations) — les deux
-emplacements que `skill-personnalite-et-sagesse.md` et
-`skill-persona-relations-humaines.md` attendaient vides jusqu'ici (voir
-`PISTES-EVOLUTION.md`, point 4). Contenu personnel, non détaillé ici.
-
-### Round 19 — premier 0 échec complet, vérifié sur disque (pas juste la narration)
-
-Passage sur `dsh 0.2.1-alpha.1` (mis à jour au round 18), `qwen3-coder`,
-contexte sain : **A.1/A.2/A.3/A.4, D.14 et C.7 tous verts — le premier
-0 échec de toute cette investigation (rounds 1 à 19).**
-
-**Vérifié indépendamment, pas seulement pris pour argent comptant** —
-exactement la discipline qu'on a dû apprendre à la dure dans les rounds
-précédents : la narration de 3b était cette fois inhabituellement
-courte (ne décrivait même pas avoir créé de fichiers), ce qui a justifié
-une vérification directe plutôt que de se fier au "0 échec" affiché :
-```bash
-find logs/validation-<horodatage>/livrables -type f
-```
-a bien confirmé les 4 fichiers attendus (`test-html5.html` +
-`theme-test/{style,index,functions}.{css,php}`), et le contenu de
-`style.css` est un vrai CSS complet avec le bon en-tête
-`Theme Name: test` — pas un fichier vide ou tronqué.
-
-**À ne pas sur-interpréter** : un seul passage propre n'est pas une
-garantie que 3a/3b sont désormais fiables à 100% — les rounds
-précédents ont montré à quel point c'est intermittent (0 échec un jour,
-glitch de template le lendemain, sur le même modèle et la même
-machine). C'est un bon signal, pas une clôture du dossier.
-
-**Au passage, `skill-clarifier-la-demande` testé pour la première fois**,
-via `dsh --profile headless` — a correctement identifié la demande comme
-trop vague et proposé de poser des questions, mais la tentative de
-répondre "Oui" ensuite a échoué (`zsh: command not found: Oui`) : pas un
-bug, `headless` répond à **une seule** tâche puis s'arrête (voir son
-`--help` — *"Answer one task and exit"*), ce n'est pas un profil de
-conversation continue. Pour un vrai aller-retour avec ce skill, utiliser
-`dsh --profile web` ou `dsh --profile tui` à la place.
-
-## 🖥️ Lancement simple et accès mobile
-
-Trois scripts optionnels, ajoutés après coup pour un usage quotidien plus
-confortable — aucun n'est requis par le reste du projet.
-
-### Icône cliquable sur le Bureau
+⚠️ **Deux réglages ne survivent pas à un redémarrage de la machine**
+(mémoire GPU, contexte Ollama) — relance `./04-scripts/setup-local-model.sh`
+après chaque reboot avant d'utiliser `dsh`.
+
+## 🖱️ Lancer avec l'interface graphique (raccourci bureau)
 
 ```bash
 ./04-scripts/creer-raccourci-lancement.sh
 ```
-Génère un `.app` double-cliquable (via `osacompile`, natif macOS, aucune
-dépendance supplémentaire) qui ouvre un Terminal et lance `./start.sh`.
-Déplaçable dans le Dock, icône personnalisable depuis le Finder (Cmd+I).
 
-### Accès depuis le mobile sur le même WiFi
+Crée une icône `.app` double-cliquable sur le Bureau. Au clic : ouvre
+une fenêtre Terminal, lance l'audit de sécurité, démarre le watcher de
+connaissances, puis `dsh --profile web` (ouvre automatiquement le
+navigateur sur `http://127.0.0.1:3080`).
 
-`dsh --profile web` écoute par défaut uniquement sur `127.0.0.1`.
-**Testé en conditions réelles (et c'est important) : il est impossible
-de le lier directement à une adresse du réseau local avec la version de
-`dsh` utilisée ici (`0.1.7-rc.2`)** — `--host 0.0.0.0` est refusé à
-l'exécution (`"it would expose remote code execution to the network;
-use 127.0.0.1 instead"`), et toute autre adresse (y compris l'IP réelle
-de la machine) est rejetée dès la validation de config
-(`$.host expected "127.0.0.1" | "0.0.0.0"`). Ce n'est pas un réglage à
-débloquer : `dsh` l'interdit délibérément. La version précédente de
-cette section (qui documentait `--host 0.0.0.0`) ne pouvait donc pas
-fonctionner — corrigée ici après l'avoir vérifié pour de vrai plutôt que
-supposé.
+## ⌨️ Lancer et gérer depuis le terminal
 
-**La vraie façon d'y accéder depuis un mobile, qui respecte cette
-protection au lieu de la contourner : un tunnel SSH.** Le téléphone se
-connecte en SSH au Mac Mini, et le tunnel redirige un port local (côté
-téléphone) vers `127.0.0.1:3080` tel que vu *depuis le Mac* — `dsh`
-continue de ne parler qu'en loopback, seul le tunnel chiffré/authentifié
-traverse le réseau.
+```bash
+./start.sh                       # équivalent de l'icône : watcher + dsh --profile web
+dsh --profile web                 # directement, sans le watcher
+dsh --profile headless "..."      # une seule tâche, répond et quitte (pas de conversation continue)
+```
 
-1. Sur le Mac Mini : Réglages Système > Général > Partage > active
-   "Connexion à distance" (Remote Login/SSH). Note le nom d'utilisateur
-   et l'adresse affichés.
-2. Lance `dsh` sur le port stable (inchangé) :
-   ```bash
-   ./04-scripts/demarrer-dsh-web-reseau.sh
-   ```
-3. Sur le téléphone, une app SSH qui gère la redirection de port locale
-   (ex. Termius, gratuite sur iOS/Android) : connexion au Mac avec une
-   règle de redirection "port local 3080 → `127.0.0.1:3080` sur
-   l'hôte distant".
-4. Une fois le tunnel actif, ouvre `http://127.0.0.1:3080/...?token=...`
-   **dans le navigateur du téléphone** (le `127.0.0.1` est alors celui du
-   téléphone, redirigé par le tunnel vers celui du Mac) — jeton récupéré
-   dans `logs/dsh-web.log` comme avant.
+Changer de modèle :
+```bash
+./04-scripts/basculer-modele.sh              # liste les profils disponibles
+./04-scripts/basculer-modele.sh reflexion    # bascule vers un profil nommé
+```
 
-Pas testé de bout en bout depuis un vrai téléphone à ce stade (confirmé
-seulement que `dsh` démarre sur `127.0.0.1:3080` et refuse toute autre
-adresse) — la mise en place du tunnel SSH lui-même reste à valider en
-conditions réelles.
+Arrêter : `Ctrl+C` dans le terminal où `dsh` tourne (le watcher
+s'arrête proprement avec lui via `start.sh`).
 
-### Démarrage automatique à l'ouverture de session
+## 💬 Fonctionnement de base — comment s'adresser à lui
+
+Deux façons de converser, toutes les deux depuis un terminal (ou
+l'interface web pour la première) :
+
+- **Interface web** (`dsh --profile web`) — chat classique, conversation
+  continue, accessible aussi depuis un mobile sur le même réseau via un
+  tunnel SSH (voir `documentation/historique-du-projet.md`).
+- **Terminal, une tâche à la fois** (`dsh --profile headless "ta question"`)
+  — répond une fois puis s'arrête ; pour une vraie conversation avec
+  plusieurs allers-retours, utilise plutôt l'interface web.
+
+Rien de spécial à apprendre pour écrire une demande — langage naturel,
+en français. L'agent choisit lui-même, selon ta formulation, quel(s)
+skill(s) invoquer (contrôle qualité, relationnel, décision rapide...).
+Si une demande est encore floue dans ta tête, demande-lui explicitement
+de la clarifier d'abord (`skill-clarifier-la-demande`) plutôt que de le
+laisser deviner.
+
+## 🎨 Personnalisation
+
+- **`01-skills/*.md`** — chaque fichier est une instruction en langage
+  naturel (pas du code) : méthode, déclencheur, garde-fous. Modifiable
+  directement, ou proposé par l'agent lui-même via le mécanisme
+  d'auto-amélioration encadré (`skill-ameliorateur-systeme` →
+  `auto-implementer.js`, limité à `01-skills/` et `03-workflows/`).
+- **`06-data/personnalite/`** et **`06-data/sagesse/`** — tes propres
+  contenus (valeurs, méthode, citations, clés relationnelles) : de
+  simples fichiers `.md`/`.csv`/`.txt`, indexés automatiquement par le
+  watcher, consultés par les skills `consulter-sagesse-interne` et
+  `persona-relations-humaines` avant toute réponse sur ces sujets.
+- **`05-configs/modeles.yaml`** — ajoute tes propres profils de modèle
+  nommés, basculables avec `basculer-modele.sh`.
+
+## 🔁 Démarrage à l'ouverture de session
 
 ```bash
 ./04-scripts/installer-demarrage-auto.sh
 ```
-Installe un `LaunchAgent` macOS qui relance
-`demarrer-dsh-web-reseau.sh` à chaque connexion — pas besoin de lancer
-quoi que ce soit à la main. `LaunchAgent` plutôt que `LaunchDaemon`
-volontairement : tourne dans la session utilisateur, pas avec les droits
-système, pas de surface de risque supplémentaire par rapport à n'importe
-quelle app lancée normalement. Instructions de désinstallation affichées
-à la fin de son exécution.
 
-`dsh` n'écoutant que sur `127.0.0.1` (voir plus haut), ce `LaunchAgent`
-ne fait qu'avoir `dsh --profile web` toujours prêt sur ce port stable —
-il n'ouvre rien sur le réseau local par lui-même. L'exposition réelle
-dépend entièrement du tunnel SSH (ou équivalent) mis en place côté
-mobile, jamais de ce script. Le jeton dans l'URL reste la seule
-protection une fois le tunnel ouvert ; ne le partage jamais tel quel.
+Installe un `LaunchAgent` macOS qui relance `dsh` automatiquement à
+chaque connexion — pas besoin de cliquer sur rien. Désinstallation
+affichée en fin d'exécution du script.
 
-**Testé en conditions réelles, un piège trouvé** : si ce dépôt vit sous
-`~/Documents` (ou `~/Desktop`/`~/Downloads`), le `LaunchAgent` échoue en
-boucle avec `Operation not permitted` — macOS protège ces dossiers (TCC,
-depuis Mojave) contre tout accès par un processus sans interface
-graphique, `/bin/bash` ne peut même pas lire le script pour l'exécuter.
-Deux solutions : déplacer le dépôt ailleurs sous `$HOME` (la plus
-propre), ou autoriser `/bin/bash` dans Réglages Système > Confidentialité
-et sécurité > Accès complet au disque — donne un accès disque large à
-toute commande bash sur la machine, pas seulement ce projet, donc un vrai
-arbitrage à faire en connaissance de cause plutôt qu'un réglage anodin.
+⚠️ Si ce dépôt vit sous `~/Documents`/`~/Desktop`/`~/Downloads`, macOS
+peut bloquer ce mécanisme (protection TCC) — voir
+`documentation/historique-du-projet.md` pour le contournement.
 
-## 🌱 Étendre vers la personnalité / sagesse / philosophie
+## 🌱 Évolutions possibles
 
-Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée
-volontairement vide. Pour l'enrichir : ajoute des fichiers `.md` dans
-`06-data/personnalite/` (ton, valeurs) et `06-data/sagesse/` (au-delà des
-leçons techniques auto-générées — réflexions, principes). Le watcher les
-indexe automatiquement ; aucun changement de code n'est nécessaire.
+Idées discutées mais pas encore construites, avec leur état réel et la
+recommandation donnée pour chacune : **[`PISTES-EVOLUTION.md`](PISTES-EVOLUTION.md)**
+(réponse systématique en français, un LLM par expertise, PDF/vision,
+voix, génération d'images, Docker par projet...).
 
-## 🗺️ Pistes d'évolution
-
-Voir [`PISTES-EVOLUTION.md`](./PISTES-EVOLUTION.md) — idées discutées mais
-pas encore commencées (réponse toujours en français, un LLM par expertise,
-sandbox Docker par projet, PDF pour le RAG...), chacune avec son état réel
-actuel et la recommandation donnée au moment de la discussion.
-
-## 📁 Contenu du paquet
-
-Inventaire réel (pas un plan) — régénéré à chaque fois qu'il dérive trop
-de `ls`, pour rester une référence fiable dans 6 mois plutôt qu'une
-intention datée.
+## 📁 Arborescence du projet
 
 ```
 dsh-harness/
-├── .gitignore               # logs/, 06-data/memoire/, 02-plugins/, meta-index.json, test-round*.html...
-├── package.json              # seule dépendance npm : @receptron/laya, optionnelle (moteur-laya.js, utilisé par decision-rapide.js)
-├── PISTES-EVOLUTION.md       # idées discutées mais pas encore commencées — état réel + recommandation pour chacune
-├── start.sh                  # point d'entrée interactif (dsh --profile web + watcher)
+├── start.sh                    # point d'entrée interactif (dsh --profile web + watcher)
+├── package.json                # seule dépendance npm : @receptron/laya (optionnelle)
+├── PISTES-EVOLUTION.md         # idées futures, pas encore construites
+├── documentation/
+│   └── historique-du-projet.md # journal de bord technique complet, tous les rounds
 │
-├── 01-skills/                 # 27 skills — voir leur description en tête de fichier pour le déclenchement
-│   ├── skill-controleur-qualite.md / skill-controleur-de-controle.md   # double contrôle d'une réponse
-│   ├── skill-decision-rapide.md / skill-ameliorateur.md / skill-ameliorateur-systeme.md
-│   ├── skill-auto-implementation.md                                    # documente auto-implementer.js
-│   ├── skill-gestion-memoire.md                                        # documente memoire-cli.js (dont backup/restore)
-│   ├── skill-journal-desaccords.md / skill-apprendre-des-echecs.md
-│   ├── skill-personnalite-et-sagesse.md / skill-consulter-sagesse-interne.md
-│   ├── skill-persona-relations-humaines.md + skill-cles-relationnelles.md (placeholder vide)
-│   ├── skill-raisonnement-scientifique.md
-│   ├── skill-apprentissage-par-confirmation.md                         # apprend des succès confirmés par l'utilisateur
-│   ├── skill-comparateur-scenarios.md                                  # A/B sur une tâche récurrente, garde le gagnant
-│   ├── skill-clarifier-la-demande.md                                   # questions par vagues AVANT de commencer, sur demande explicite
-│   ├── skill-methode-raisonnement.md                                   # décomposer/relire par ordre fixe, s'améliore par essai-erreur (lecon-methode)
-│   ├── skill-journal-interne.md                                       # journal d'aisance/friction exprimé par le modèle (journal-interne) — honnête sur sa nature
-│   ├── skill-testeur-docker.md / skill-evaluateur.md / skill-analyse-objectifs.md
-│   ├── skill-boucles-agentiques.md / skill-detection-erreurs-silencieuses.md
-│   └── skill-extracteur-tests.md / skill-synthese-finale.md / skill-verifier-et-croiser.md
-│
-├── 02-plugins/                # agentic-research, dsh-find-plugins (clonés à l'install, hors git)
-│
-├── 03-workflows/               # 5 workflows JSON (schéma dsh non-vérifiable formellement)
-│   ├── auto-amelioration.workflow.json                  # propose → évalue → applique (auto-implementer.js)
-│   ├── controle-qualite.workflow.json                   # double contrôle
-│   ├── systeme-auto-ameliorant-avec-controle.workflow.json
-│   ├── meta-experimentation.workflow.json
-│   └── recherche-approfondie.workflow.json
-│
-├── 04-scripts/
-│   │ # Infrastructure (logs, mémoire, validation)
-│   ├── config.js                      # HARNESS_HOME centralisé — seule déclaration, importée partout (testé)
-│   ├── dsh-logger.js                  # logs structurés + SILENT_ERROR (testé)
-│   ├── errors-cli.js                  # consultation CLI du journal (testé)
-│   ├── memoire-cli.js                 # mémoire structurée CRUD + backup/restore (testé de bout en bout)
-│   ├── journal-desaccords.js          # historique JSONL append-only des fiable:false (testé)
-│   ├── valider-skills-workflows.js    # vérification déterministe skills/workflows (testé)
-│   ├── watch-knowledge-base.js        # indexe 06-data/ pour le RAG
-│   │ # Boucles agentiques et pipeline qualité
-│   ├── boucle-hook-stop.js            # boucle 04 : critère d'arrêt déterministe (testé)
-│   ├── boucle-surveillance.sh         # boucle 05 : surveillance périodique (testé)
-│   ├── decision-rapide.js             # décision rapide, moteurs ollama/laya (ollama testé via mock)
-│   ├── moteur-laya.js                 # toute l'intégration @receptron/laya, isolée (testé via mock)
-│   ├── auto-implementer.js            # applique une proposition sur branche git dédiée (testé) ;
-│   │                                     refuse si HEAD est déjà sur une branche auto-amelioration/* orpheline
-│   ├── consigner-verdict-qualite.js   # étape obligatoire de skill-controleur-qualite (testé réel, round 8/9)
-│   ├── docker-test-runner.js
-│   │ # Installation et configuration machine
-│   ├── bootstrap-complet.sh           # point d'entrée unique, machine neuve → tout installé (testé via mocks)
-│   ├── install-plugins.sh             # plugins dsh corrigés (dsh-workflow, dsh-tui, etc.)
-│   ├── setup-local-model.sh           # bascule vers Ollama local + mémoire GPU (testé, fusion YAML) ;
-│   │                                     sans argument, résout le modèle par défaut depuis modeles.yaml
-│   ├── basculer-modele.sh             # bascule entre profils de 05-configs/modeles.yaml (testé)
-│   ├── configurer-skills-dsh.sh       # déclare 01-skills/ à dsh (customSkillDirs, testé)
-│   ├── desactiver-recherche-web-cloud.sh  # désactive l'outil web câblé sur l'API cloud DeepSeek (testé)
-│   ├── security-check.sh
-│   │ # Confort au quotidien (optionnels)
-│   ├── creer-raccourci-lancement.sh   # icône .app double-cliquable (testé)
-│   ├── demarrer-dsh-web-reseau.sh     # dsh --profile web ouvert sur le WiFi local
-│   ├── installer-demarrage-auto.sh    # LaunchAgent macOS pour le script précédent
-│   └── suite-tests-reelle.sh          # protocole de validation complète sur machine réelle,
-│                                         contrôles A/C.7/D.14 qui font réellement échouer le script (testé via stubs)
-│
-├── 05-configs/
-│   ├── settings.local-ollama.yaml     # schéma vérifié
-│   ├── profile-plugins.yml            # schéma non-vérifié, à confirmer
-│   └── modeles.yaml                   # profils de modèles nommés (LLM interchangeables)
-│
-├── 06-data/
-│   ├── personnalite/                  # ton, valeurs (dont valeurs.md)
-│   ├── sagesse/
-│   │   ├── lecons-apprises.md         # alimenté par skill-apprendre-des-echecs
-│   │   └── citations-sages/           # citations + auteurs confiés par l'utilisateur (vide, prêt)
-│   ├── cours-techniques/ , cours-webmarketing/
-│   └── memoire/                       # hors git — memoire.json + backups/ (memoire-cli.js)
-│
-└── logs/                              # hors git — pipeline.jsonl + logs/validation-<horodatage>/
+├── 01-skills/                   # 27 skills en langage naturel — voir leur description pour le déclenchement
+├── 03-workflows/                # 5 workflows JSON (pipelines multi-étapes)
+├── 04-scripts/                  # scripts d'installation, de gestion, et logique métier (Node + bash)
+├── 05-configs/                  # profils de modèles, config Ollama de référence
+└── 06-data/
+    ├── personnalite/             # tes contenus personnels (valeurs, méthode, clés relationnelles...)
+    └── sagesse/                  # citations, leçons apprises
 ```
+
+Détail fichier par fichier dans `documentation/historique-du-projet.md`.

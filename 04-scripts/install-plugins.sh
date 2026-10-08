@@ -1,7 +1,7 @@
 #!/bin/bash
 # Installe le CLI dsh + tous les plugins demandés, avec les noms réels
 # (plusieurs de ceux fournis dans le brief initial n'existaient pas tels
-# quels — voir README.md, section "Vérification de la liste de plugins").
+# quels — voir documentation/historique-du-projet.md, section "Vérification de la liste de plugins").
 set -euo pipefail
 cd "$(dirname "$0")/.."
 HARNESS_HOME="$(pwd)"

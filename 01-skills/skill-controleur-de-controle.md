@@ -46,7 +46,7 @@ node 04-scripts/consigner-verdict-qualite.js --composant controleur-de-controle 
 
 Même raison qu'au premier niveau (voir `skill-controleur-qualite.md`) :
 en conditions réelles, un verdict seulement écrit en texte libre n'a
-laissé aucune trace vérifiable — voir `README.md`, "Validation sur
+laissé aucune trace vérifiable — voir `documentation/historique-du-projet.md`, "Validation sur
 machine réelle", round 7. Cette étape n'est pas optionnelle.
 
 ## Ce que tu ne fais PAS

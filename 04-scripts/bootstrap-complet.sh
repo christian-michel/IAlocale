@@ -2,12 +2,12 @@
 # bootstrap-complet.sh — point d'entrée unique pour une machine neuve :
 # vérifie/installe tout ce dont ce projet a eu besoin au fil de son
 # développement (chaque dépendance ci-dessous a été une vraie cause de
-# blocage à un moment, voir README "Validation sur machine réelle"),
+# blocage à un moment, voir documentation/historique-du-projet.md "Validation sur machine réelle"),
 # puis enchaîne la configuration complète en un seul lancement.
 #
 # Pensé pour : "j'efface mon Mac Mini, je veux tout retrouver avec une
 # seule commande." Ne remplace pas les scripts individuels (toujours
-# utilisables séparément, voir README section Installation) — les
+# utilisables séparément, voir documentation/historique-du-projet.md section Installation) — les
 # orchestre dans l'ordre, avec les vérifications de prérequis qui leur
 # manquaient en amont.
 #

@@ -8,7 +8,7 @@ description: "À consulter avant de faire appel à un skill délibératif pour u
 `04-scripts/decision-rapide.js` reproduit localement l'idée de JEV
 (TypeSafe AI, "System One Model") : pour une question **fermée**, pas
 besoin de faire générer une réponse complète par l'agent. JEV lui-même
-est un service cloud payant, non local (voir README, section
+est un service cloud payant, non local (voir documentation/historique-du-projet.md, section
 "Auto-itération") ; ce script en reproduit le principe entièrement en
 local, sans rien payer — avec deux moteurs au choix (`--moteur`) :
 
@@ -103,7 +103,7 @@ confirmer sur la machine cible.
 
 Les autres workflows n'ont volontairement pas été touchés : remplacer
 une étape sans pouvoir vérifier l'effet sur `dsh` en conditions réelles
-(jamais exécuté dans mon environnement, voir README section "Non
+(jamais exécuté dans mon environnement, voir documentation/historique-du-projet.md section "Non
 vérifiable") serait plus risqué qu'utile. Demande l'intégration d'un cas
 précis plutôt qu'une bascule générale.
 

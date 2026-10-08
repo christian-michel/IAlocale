@@ -5,7 +5,7 @@
 #
 # Ce script ne fait QUE résoudre le nom de profil vers l'id de modèle réel
 # puis délègue à setup-local-model.sh, déjà testé (fusion YAML idempotente
-# — voir README) : aucune logique de configuration n'est dupliquée ici.
+# — voir documentation/historique-du-projet.md) : aucune logique de configuration n'est dupliquée ici.
 #
 # Usage :
 #   ./basculer-modele.sh              # liste les profils disponibles
