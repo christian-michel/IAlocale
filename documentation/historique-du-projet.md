@@ -1586,6 +1586,78 @@ et sécurité > Accès complet au disque — donne un accès disque large à
 toute commande bash sur la machine, pas seulement ce projet, donc un vrai
 arbitrage à faire en connaissance de cause plutôt qu'un réglage anodin.
 
+### Round 21 — ce qu'il faut réellement pour fine-tuner Laya, et une lacune corrigée dans le journal
+
+**Contexte** : `journal-desaccords.js` (Round antérieur) accumule les cas
+où `decision-rapide.js` n'était pas fiable, présenté explicitement comme
+"première brique, pas encore le fine-tuning lui-même" — intention posée,
+mécanique réelle jamais vérifiée. Ce round creuse cette mécanique pour de
+vrai plutôt que de la laisser comme vœu.
+
+**Recherche faite** (web, pas d'exécution — voir plus bas pourquoi) sur
+le dépôt réel du modèle, `github.com/NandhaKishorM/laya` (le package
+Python `laya`, distinct du wrapper npm `@receptron/laya` utilisé ici) :
+
+- API de fine-tuning confirmée : `laya.train.finetune(train_path,
+  base_dir, out_dir, TrainConfig(option_layout="parallel"))`.
+- Format du fichier d'entraînement confirmé en lisant directement le
+  script de préparation du dépôt
+  (`notebooks/laya_finetune_typed_decisions_mps.py`, pas seulement le
+  README qui ne le montre pas) : JSONL, chaque ligne exactement
+  `{"state": ..., "questions": ..., "gold": ...}`, construit depuis le
+  dataset HuggingFace `LocalLLaMA/typed-decisions`.
+- Sortie : `model.safetensors` + `rl_agent_config.json`, rechargeable
+  avec `laya.load()`. Calibration par une température ajustée après coup,
+  une par type (`choice`/`score`/`noul`) — cohérent avec le biais de
+  sur-confiance déjà documenté empiriquement côté `laya` dans
+  `skill-decision-rapide.md`.
+- Deux chemins d'entraînement : notebook Kaggle (2×T4, boucle complète)
+  ou script autonome Apple Silicon (MPS/CPU) — ce second chemin tourne
+  directement sur la machine cible de ce projet (Mac Mini M4), contrairement
+  au premier.
+- Confirmation supplémentaire, qui change la lecture de tout ce chantier :
+  le checkpoint publié qui bat Jev en benchmark (`laya-typed-decisions`,
+  0.766 vs 0.727) **est lui-même un fine-tune** — le checkpoint de base
+  utilisé par ce projet (zéro-shot) est documenté à 0.362 par la fiche du
+  modèle. Accumuler des exemples réels pour fine-tuner n'est donc pas une
+  idée de ce projet : c'est la voie documentée par l'auteur du modèle
+  lui-même pour obtenir une vraie qualité.
+
+**Ce qui reste non vérifiable depuis cet environnement** : le contenu
+interne exact des dicts `questions`/`gold` par type. `huggingface.co`
+est inaccessible depuis ce bac à sable (`getaddrinfo ENOTFOUND` via
+`WebFetch` — échec réseau/DNS confirmé, pas un refus de contenu ni un
+blocage du proxy sur un contenu précis), donc ni la fiche du modèle ni un
+exemple du dataset `LocalLLaMA/typed-decisions` n'ont pu être inspectés
+pour de vrai. Plutôt que d'inventer ce schéma pour pouvoir annoncer un
+convertisseur fonctionnel, aucun script de conversion
+`journal-desaccords.js` → `train.jsonl` n'a été écrit ce round — ça
+aurait reproduit exactement ce que `journal-desaccords.js` refuse de
+faire depuis sa création (voir son en-tête : "le format d'entraînement
+réel n'est pas encore connu, donc pas inventé ici"). Détail complet,
+piste concrète pour lever cette inconnue depuis le Mac (accès réseau
+réel), et ce que le convertisseur pourra faire une fois le schéma
+confirmé : voir `skill-journal-desaccords.md`, section "Vers un vrai
+fine-tuning".
+
+**Correction apportée, elle, indépendante de cette inconnue** :
+`journal-desaccords.js` ne capturait pas la liste complète des options
+proposées pour une décision `--type choix` — seulement celle retenue
+(`decision_rapide`/`decision_deliberative`). Sans ces options écartées,
+aucun schéma de conversion, quel qu'il soit, n'aurait pu un jour
+reconstruire une question d'entraînement complète à partir d'une ligne du
+journal : une perte de données silencieuse, découverte en concevant ce
+futur convertisseur, pas en l'exécutant. Corrigé : `--choix "a,b,c"`
+(même format que `decision-rapide.js`) devient requis pour `--type
+choix`, stocké dans chaque ligne. `identifier-meilleur`
+(`03-workflows/systeme-auto-ameliorant-avec-controle.workflow.json`,
+1.5.0 → 1.5.1) transmet maintenant ce champ aux deux appels à
+`journal-desaccords.js enregistrer`. Comme pour le reste de ce workflow,
+l'orchestration réelle par `dsh-workflow` reste non vérifiée dans mon
+environnement — seule la nouvelle validation d'arguments de
+`journal-desaccords.js` relève de la syntaxe du script lui-même, pas de
+son exécution par un vrai workflow.
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée

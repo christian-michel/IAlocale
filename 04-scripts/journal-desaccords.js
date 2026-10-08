@@ -20,7 +20,15 @@
  *   node journal-desaccords.js enregistrer --question "..." --type oui-non|choix|note
  *       --moteur ollama|laya --decision-rapide <valeur> --confiance-rapide <0-1>
  *       [--seuil-confiance <0-1>] [--contexte "..."] [--decision-deliberative <valeur>]
- *       [--composant identifier-meilleur]
+ *       [--choix "a,b,c"] [--composant identifier-meilleur]
+ *
+ * --choix est requis quand --type choix (mêmes libellés, mêmes virgules
+ * que decision-rapide.js) : sans la liste complète des options, la ligne
+ * dit quelle option a été retenue mais pas celles écartées — information
+ * perdue pour de bon si elle n'est pas captée ici (append-only, voir plus
+ * bas). Pas de valeur par défaut : une ligne "choix" sans options
+ * complètes serait inutilisable plus tard, mieux vaut échouer tout de
+ * suite que la consigner à moitié.
  *
  *   node journal-desaccords.js resume [--moteur ollama|laya] [--type oui-non|choix|note]
  *   node journal-desaccords.js exporter [--moteur ...] [--type ...] [--resolution desaccord]
@@ -82,8 +90,21 @@ if (commande === 'enregistrer') {
   const requis = ['question', 'type', 'moteur', 'decision-rapide', 'confiance-rapide'];
   const manquants = requis.filter(c => args[c] === undefined || args[c] === true);
   if (manquants.length) {
-    console.error(`Usage : enregistrer --question "..." --type oui-non|choix|note --moteur ollama|laya --decision-rapide <valeur> --confiance-rapide <0-1> [--seuil-confiance <0-1>] [--contexte "..."] [--decision-deliberative <valeur>]`);
+    console.error(`Usage : enregistrer --question "..." --type oui-non|choix|note --moteur ollama|laya --decision-rapide <valeur> --confiance-rapide <0-1> [--seuil-confiance <0-1>] [--contexte "..."] [--decision-deliberative <valeur>] [--choix "a,b,c"]`);
     console.error(`Champ(s) manquant(s) : ${manquants.join(', ')}`);
+    process.exit(1);
+  }
+
+  // --choix requis pour le type "choix" : sans la liste complète des
+  // options proposées, une ligne ne dit que l'option retenue, pas celles
+  // écartées — strictement insuffisant pour reconstruire un jour une
+  // question d'entraînement (même format que decision-rapide.js, voir
+  // son --choix). Inutile pour les autres types, donc pas réclamé.
+  const choix = args.type === 'choix'
+    ? String(args.choix || '').split(',').map(s => s.trim()).filter(Boolean)
+    : null;
+  if (args.type === 'choix' && choix.length < 2) {
+    console.error('Usage : --type choix requiert --choix "a,b,c" (au moins deux options, mêmes libellés que ceux soumis à decision-rapide.js)');
     process.exit(1);
   }
 
@@ -98,6 +119,7 @@ if (commande === 'enregistrer') {
     question: args.question,
     contexte: typeof args.contexte === 'string' ? args.contexte : null,
     type: args.type,
+    choix,
     moteur: args.moteur,
     decision_rapide: decisionRapide,
     confiance_rapide: Number(args['confiance-rapide']),
