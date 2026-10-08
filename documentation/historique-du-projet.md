@@ -1658,6 +1658,51 @@ environnement — seule la nouvelle validation d'arguments de
 `journal-desaccords.js` relève de la syntaxe du script lui-même, pas de
 son exécution par un vrai workflow.
 
+### Round 22 — retrait de la sélection automatique du moteur (laya fait planter en usage réel)
+
+**Signalé directement par l'utilisateur** : `laya`, branché depuis le
+Round 20/21 pour être choisi automatiquement sur tout `--domaine` non
+technique (code ajouté commit `1011cbc`), fait planter en usage réel.
+Aucun diagnostic détaillé n'a été demandé ni fait ici (pas de stack
+trace fournie) — la décision a été de revenir en arrière plutôt que
+d'essayer de corriger à l'aveugle un mécanisme qui s'est avéré ne pas
+être prêt pour un déclenchement automatique, sans supervision.
+
+**Revert ciblé**, pas un simple `git revert` des deux commits d'origine
+(`1011cbc`, `371db78`) : ces commits avaient aussi corrigé/documenté des
+choses restées valables depuis (le round de recherche sur le
+fine-tuning, Round 21, a touché les mêmes fichiers). Édité à la main à
+la place :
+
+- `04-scripts/decision-rapide.js` : supprimé `choisirMoteurParDefaut()`,
+  `estDomaineCode()`, `MOTS_DOMAINE_CODE`, l'argument `--domaine` et sa
+  prise en compte. `--moteur` redevient le seul moyen d'obtenir `laya` —
+  par défaut (`ollama`) si rien n'est précisé, exactement le
+  comportement d'avant le Round 20. L'en-tête du fichier garde la trace
+  du fait réel confirmé (laya a fonctionné une fois, confiance 0.83,
+  362s de chargement) et du fait qu'il a ensuite planté — les deux
+  informations réelles, ni l'une ni l'autre effacée.
+- `03-workflows/systeme-auto-ameliorant-avec-controle.workflow.json`
+  (1.5.1 → 1.6.0) : `identifier-meilleur` ne transmet plus `--domaine` à
+  `decision-rapide.js` — retour à un appel sans `--moteur`, donc
+  `ollama` par défaut comme avant le Round 20. Le correctif `--choix`
+  pour `journal-desaccords.js` (Round 21) est conservé : indépendant du
+  problème de plantage, toujours valable.
+- `01-skills/skill-decision-rapide.md` : section "Sélection automatique
+  du moteur (`--domaine`)" supprimée, section "Limites du moteur laya"
+  complétée avec le plantage constaté, note d'avertissement ajoutée en
+  tête de fichier.
+
+**Ce qui n'a volontairement pas été fait** : pas de tentative de
+diagnostiquer la cause du plantage (mémoire GPU insuffisante au moment
+du chargement ? conflit avec `dsh` tournant en parallèle ? bug du
+wrapper `@receptron/laya` lui-même ?) — aucune de ces hypothèses n'a été
+vérifiée, inventer une cause ne ferait qu'ajouter une fausse certitude.
+`laya` reste disponible manuellement (`--moteur laya` explicite) pour
+qui veut continuer à l'essayer en observant le résultat, mais ne sera
+plus jamais invoqué automatiquement tant que ce plantage n'est pas
+compris.
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée
