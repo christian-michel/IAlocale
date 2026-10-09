@@ -290,6 +290,64 @@ reprendre ce travail sur l'usage automatique de `laya`.
 **État actuel** : pas commencé, aucune ligne de code écrite. Consigné
 ici uniquement pour ne pas perdre l'idée entre deux sessions.
 
+## 8. Laya comme routeur à l'entrée de la conversation (triage du prompt)
+
+**Lien avec le point 7** : même pattern (sonder `laya` avec un seuil de
+confiance, 80 % ici aussi, basculer sur `ollama` en dessous), mais
+appliqué à un moment différent — pas pour déléguer une tâche répétitive
+*pendant* le travail d'un agent, mais pour trier *chaque prompt entrant*
+avant même de décider quel chemin de l'orchestrateur l'emprunte. Mêmes
+préalables que le point 7 (`--moteur laya` validé manuellement sans
+plantage, projet unique, travail sur une nouvelle branche après fusion
+d'`ollama` dans `main`).
+
+**Idée telle que formulée par l'utilisateur**, à affiner :
+
+1. Pour chaque prompt reçu, `laya` répond à plusieurs questions fermées
+   avec un pourcentage de confiance chacune : *est-ce urgent ?*,
+   *est-ce technique ?*, *est-ce du développement personnel /
+   coaching ?* (une quatrième question, *"est-ce de la technique ?"*,
+   reprend la deuxième telle que formulée par l'utilisateur — probable
+   redite plutôt qu'un vrai quatrième axe distinct ; à clarifier à la
+   reprise, pas corrigé ici pour rester fidèle à la demande).
+2. Si une réponse est sous 80 % de confiance, bascule sur `ollama`, qui
+   peut alors poser une ou plusieurs questions à l'utilisateur pour
+   préciser le contexte manquant.
+3. Retour vers `laya` pour retenter une réponse sur les éléments qui
+   manquaient, maintenant que le contexte est plus précis.
+4. Routage selon le résultat final :
+   - **Développement personnel / coaching / sagesse** → l'orchestrateur
+     consulte en premier les contenus du dossier `06-data/sagesse/`
+     (cohérent avec l'ordre de priorité déjà construit dans
+     `01-skills/skill-persona-relations-humaines.md` : clés internes
+     d'abord, citations de sagesse ensuite, raisonnement général en
+     dernier recours — ce routage déciderait donc *quand* déclencher
+     cette chaîne existante, sans la remplacer).
+   - **Code / technique** → chemin classique déjà en place :
+     orchestrateur, skills, agents, `qwen3-coder` comme LLM.
+   - **Ni l'un ni l'autre** → l'orchestrateur retombe sur son
+     architecture de pensée de base pour échanger et construire la
+     conversation, sans routage spécialisé.
+
+**Remarques à garder pour la reprise** (non tranchées) :
+- **Effet de l'axe "urgence"** non précisé dans le routage décrit —
+  les trois branches finales (coaching, technique, aucun des deux) ne
+  disent pas ce que change une réponse "urgent". À définir quand cette
+  piste sera reprise.
+- **Mécanisme déjà disponible, rien de neuf à inventer côté outillage** :
+  chaque question fermée de ce triage est exactement ce que
+  `decision-rapide.js --type oui-non --moteur laya --seuil-confiance
+  0.8` fait déjà aujourd'hui pour une question isolée — la nouveauté
+  ici est l'enchaînement (plusieurs questions, boucle de reprécision
+  via `ollama`, routage final), pas un nouveau mode de décision.
+- **Reste à définir** : le nombre d'allers-retours autorisés entre
+  `ollama` (clarification) et `laya` (nouvelle tentative) avant
+  d'abandonner et de rester sur `ollama` pour la suite — sans limite,
+  un contexte vraiment ambigu pourrait boucler longtemps avant même de
+  commencer à répondre à l'utilisateur.
+
+**État actuel** : pas commencé, aucune ligne de code écrite.
+
 ---
 
 Aucune de ces pistes n'a de code associé pour l'instant — ce fichier existe
