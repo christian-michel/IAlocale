@@ -226,6 +226,70 @@ réel de ModLens, confirmer ou infirmer les capacités vision des modèles
 déjà présents, et tester un couple whisper.cpp/`say` en conditions réelles
 (c'est la piste la moins chère à valider des quatre).
 
+## 7. Appel automatique à Laya par les agents, décidé par une auto-évaluation de fiabilité
+
+**Contexte** : vient juste après le retrait de la sélection automatique
+`--domaine` (Round 22, `documentation/historique-du-projet.md`) — `laya`
+avait planté en usage réel une fois branché sans supervision. Cette
+piste est une tentative différente de rendre l'appel automatique, pas
+une relance du même mécanisme : au lieu d'une heuristique de mots-clés
+décidée à l'avance (le code/pas-le-code), l'agent évaluerait lui-même,
+tâche par tâche, si `laya` est fiable avant de lui en confier le
+traitement.
+
+**Idée telle que formulée par l'utilisateur**, à affiner, décrite en
+étapes :
+1. L'agent définit une tâche à faire (ex. classer/trier un lot
+   d'éléments, trancher une série de questions fermées répétitives).
+2. Il demande à `laya` d'estimer sa propre fiabilité sur cette tâche —
+   un pourcentage de confiance par réponse.
+3. Selon la proportion de réponses au-dessus de 80 % de confiance, il
+   choisit : (a) tout confier à `laya`, (b) ne rien lui confier, ou (c)
+   lui confier la partie où sa confiance dépasse 80 % et traiter
+   lui-même le reste.
+4. But : gagner du temps et consommer moins d'énergie que de tout
+   traiter avec le gros modèle.
+
+**But déjà discuté, lié** : le seuil de 80 % mentionné correspond à
+`--seuil-confiance` dans `decision-rapide.js`, déjà existant (réglé
+différemment selon les endroits aujourd'hui — 0.6 dans l'exemple du
+skill, 0.75 dans le workflow) — à harmoniser à 0.8 quand cette piste sera
+reprise, pas un nouveau mécanisme à inventer.
+
+**Remarques/suggestions à garder pour la reprise** (pas tranchées,
+l'utilisateur a explicitement dit que le process restera à affiner) :
+- **Coût du chargement à froid** (Round 20 : ~362s pour charger `laya`,
+  `laya` n'a pas de serveur persistant — voir "Pas de serveur
+  persistant" dans `skill-decision-rapide.md`) : l'étape 2 (sonder la
+  confiance) et l'étape 3 (traiter réellement) rechargeraient le modèle
+  deux fois si elles ne sont pas faites dans le même processus/la même
+  session chargée — à concevoir pour ne charger qu'une fois.
+- **Sur quoi porte le sondage de confiance** : un échantillon des
+  éléments réels à traiter, ou l'ensemble d'entre eux par avance ? Si
+  c'est l'ensemble, l'étape 2 fait déjà presque tout le travail de
+  l'étape 4 (classer) — à clarifier si le sondage doit rester un
+  échantillon représentatif plus léger que la tâche complète.
+- **Alimenter `journal-desaccords.js` au passage** : chaque décision de
+  "confier/ne pas confier" à `laya`, et son résultat réel une fois
+  connu, est exactement le genre de donnée que ce journal existe pour
+  accumuler (voir Round 21, piste du fine-tuning) — à relier plutôt qu'à
+  dupliquer un mécanisme de journalisation séparé.
+- **Préalable non négociable avant toute implémentation** : `--moteur
+  laya` doit avoir été rejoué manuellement plusieurs fois sans plantage
+  (validation en cours par l'utilisateur, voir Round 22) avant de
+  construire quoi que ce soit ici — la cause du plantage initial n'a
+  toujours pas été diagnostiquée.
+
+**Séquencement convenu avec l'utilisateur** : d'abord stabiliser et
+valider le fonctionnement avec `ollama` seul sur la branche actuelle,
+fusionner cette branche dans `main` une fois validé par l'utilisateur en
+conditions réelles ; **puis**, sur une nouvelle branche du même dépôt
+(pas un projet séparé — voir la discussion qui a précédé cette piste),
+reprendre ce travail sur l'usage automatique de `laya`.
+
+**État actuel** : pas commencé, aucune ligne de code écrite. Consigné
+ici uniquement pour ne pas perdre l'idée entre deux sessions.
+
 ---
 
 Aucune de ces pistes n'a de code associé pour l'instant — ce fichier existe
