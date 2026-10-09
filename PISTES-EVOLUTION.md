@@ -464,6 +464,76 @@ code écrite — attente du retour de l'utilisateur sur la validation
 d'`ollama` seul et de la fusion dans `main` avant toute reprise de ce
 chantier (points 7, 8 et 9).
 
+## 10. Mesurer la finesse réelle du paramétrage, pas seulement l'existence fonctionnelle
+
+**Demandé explicitement par l'utilisateur** : ce qui compte n'est pas
+qu'un mécanisme existe, mais qu'il exécute *efficacement, rapidement et
+finement* le travail demandé — en temps, en ressources, en justesse et
+en pertinence. `suite-tests-reelle.sh` (voir
+`documentation/historique-du-projet.md`) valide déjà que les choses
+*fonctionnent* (pass/fail) ; rien à ce jour ne mesure *à quel point*
+elles fonctionnent bien. Ce point consigne le besoin, pas encore une
+implémentation.
+
+**Quatre axes de mesure distincts, à ne pas confondre** :
+- **Temps** : latence par type de requête (réponse directe, décision
+  rapide, recherche avec outils, génération de fichier...). Plusieurs
+  briques exposent déjà des chiffres bruts à exploiter plutôt qu'à
+  réinventer : `decision-rapide.js` sépare `chargement_ms`/`decision_ms`
+  dans `detail_timing` (voir Round 20) ; `dsh-logger.js` horodate déjà
+  chaque étape journalisée.
+- **Ressources** : RAM/GPU unifiée du Mac Mini (contrainte déjà centrale
+  au point 2 — un seul modèle ~15-19 Go chargé à la fois) ; `ollama ps`
+  donne l'état réel du modèle chargé, déjà utilisé comme vérification
+  manuelle dans le README (étape 3 de l'installation détaillée) mais
+  jamais consigné automatiquement.
+- **Justesse** : mesurable objectivement pour tout ce qui a une réponse
+  vérifiable (décisions fermées de `decision-rapide.js`, résultats de
+  calcul, conformité à un schéma) — `journal-desaccords.js` capture déjà
+  une partie de ce signal pour les décisions rapides (accord/désaccord
+  avec la comparaison délibérative, voir Round 21).
+- **Pertinence** : plus subjective (une réponse peut être juste sans
+  être la plus utile) — deux mécanismes existants captent déjà un signal
+  proche sans être pensés comme un outil de mesure : `skill-evaluateur`
+  (note un résultat) et `skill-apprentissage-par-confirmation` (demande
+  confirmation à l'utilisateur après une réponse substantielle, consigne
+  via `memoire-cli.js --type reponse-validee`). À vérifier si ce signal
+  suffit tel quel ou s'il faut un mécanisme dédié.
+
+**Principe directeur pour la suite** : ne pas construire un nouveau
+mécanisme de mesure par axe sans d'abord vérifier ce que les briques
+existantes exposent déjà (comme ci-dessus) — cohérent avec la discipline
+déjà appliquée ailleurs dans ce projet (ne pas dupliquer, ne pas
+inventer ce qui peut être vérifié).
+
+**Lien direct avec les points 7/8/9** : ce travail de mesure n'est pas
+seulement un chantier à part — c'est le mécanisme qui rendra vérifiable
+l'hypothèse non tranchée au point 8 ("réduire les hallucinations" via
+`laya`) et toute amélioration annoncée par l'intégration de `laya` en
+général. Sans mesure *avant* (ollama seul, une fois stabilisé — l'état
+que l'utilisateur teste actuellement) et *après* (une fois `laya`
+intégré), aucune comparaison ne serait crédible — même principe déjà
+posé au point 2 ("à chronométrer pour de vrai avant de trancher").
+**Séquencement proposé** : établir une mesure de référence (temps,
+ressources, justesse) sur la branche `ollama` seul, une fois validée et
+fusionnée dans `main` — avant d'attaquer les points 7/8/9, pas après.
+
+**Reste à définir avant toute implémentation** :
+- Un jeu de requêtes représentatif et stable à rejouer à l'identique
+  d'une mesure à l'autre (sans quoi aucune comparaison n'a de sens) —
+  les sept familles de demandes du point 9 sont un candidat naturel de
+  base.
+- Qui/quoi juge la "pertinence" de façon répétable : relecture humaine
+  systématique, ou un des mécanismes existants cités plus haut,
+  suffisamment fiable pour ça ?
+- Où stocker ces mesures dans le temps (nouveau journal JSONL dans
+  `06-data/memoire/`, sur le même principe append-only que
+  `journal-desaccords.js` ? à trancher).
+
+**État actuel** : besoin consigné, aucune ligne de code écrite. Reprise
+prévue après validation et fusion d'`ollama` seul dans `main`, avant les
+points 7/8/9.
+
 ---
 
 Aucune de ces pistes n'a de code associé pour l'instant — ce fichier existe
