@@ -301,7 +301,35 @@ préalables que le point 7 (`--moteur laya` validé manuellement sans
 plantage, projet unique, travail sur une nouvelle branche après fusion
 d'`ollama` dans `main`).
 
-**Idée telle que formulée par l'utilisateur**, à affiner :
+**Objectif clarifié par l'utilisateur** : pas seulement trier le prompt
+vers le bon chemin, mais **réduire les hallucinations du gros modèle**
+en ne lui donnant jamais le prompt brut tel quel. `laya` produirait en
+amont un artefact plus propre — un JSON clair, un prompt reformulé plus
+précis, un classement fiable, voire dans certains cas une anticipation
+de la prochaine action probable — et ne renverrait ce retour au LLM
+qu'une fois cet artefact prêt, pour que le LLM parte d'une base mieux
+orientée plutôt que d'un texte ambigu, et réponde plus vite.
+
+**Avis donné à ce stade** (discussion, rien tranché) :
+- Pour tout ce qui reste une décision fermée (JSON structuré, classement,
+  tri) : cohérent avec ce que `laya` fait déjà ailleurs dans ce projet
+  (sortie contrainte par schéma, comme `decision-rapide.js` le fait déjà
+  côté `ollama`) — étendre ce principe en amont du LLM plutôt qu'à côté
+  de lui est une extension naturelle, pas un nouveau principe.
+- "Anticiper la prochaine action possible" est différent : une tâche
+  ouverte/générative, pas une décision fermée avec pourcentage de
+  confiance — ce n'est pas le genre de chose que les trois types fixes
+  de `laya` (`noul`/`choice`/`score`) sont conçus pour bien faire. À
+  traiter séparément du reste si cette piste est reprise, pas comme une
+  simple variante de "classement fiable".
+- La prémisse elle-même ("un artefact structuré en amont réduit les
+  hallucinations du LLM qui reçoit ensuite ce retour") est plausible
+  mais non vérifiée dans ce projet — à mesurer réellement une fois cette
+  piste reprise (comparer les réponses du LLM avec et sans ce passage
+  par `laya` sur les mêmes prompts), pas à supposer.
+
+**Idée telle que formulée par l'utilisateur**, à affiner (mécanique de
+routage proprement dite) :
 
 1. Pour chaque prompt reçu, `laya` répond à plusieurs questions fermées
    avec un pourcentage de confiance chacune : *est-ce urgent ?*,
