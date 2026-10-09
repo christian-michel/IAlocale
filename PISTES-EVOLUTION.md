@@ -459,6 +459,31 @@ une liste de modules à coder un par un dans l'ordre. À utiliser comme
 grille de lecture pour auditer ce qu'`01-skills/` couvre déjà et ce qui
 manque, pas comme plan d'implémentation séquentiel.
 
+**Exigence précisée par l'utilisateur, en relisant ce point** : au
+moment venu, l'orchestrateur devra avoir la capacité de **marquer
+correctement et de la manière la plus fiable possible** à quelle étape
+il se trouve parmi les 8, et de **diagnostiquer explicitement le
+message** selon les six axes de l'étape 3 (intention, contraintes,
+références implicites, ton & registre, ambiguïté, contexte personnel —
+"ICRATP" dans ce fichier). Pas juste suivre ce modèle en arrière-plan de
+façon implicite : le rendre visible/traçable dans le fonctionnement
+réel.
+
+**Tension à résoudre à la reprise, pas maintenant** : ça va plus loin
+que la mise en garde "un réseau, pas un organigramme" juste au-dessus —
+marquer fiablement une étape *suppose* un signal explicite quelque part
+(log, champ structuré...), pas seulement un comportement diffus. Reste à
+définir, le moment venu : qu'est-ce qui marque une étape — un log
+structuré par skill/étape (cohérent avec `dsh-logger.js`, déjà utilisé
+partout), une sortie JSON explicite type diagnostic ICRATP produite en
+amont de chaque réponse, autre chose ? Et doit-on tagger les 8 étapes
+pour de vrai, ou seulement celles qui bénéficient concrètement d'un
+traitement différencié (ex. étape 3/ICRATP et étape 5/risques semblent
+plus immédiatement actionnables que étape 2/tokenisation, hors de portée
+de ce projet). Lié au point 10 : un marquage fiable des étapes est aussi
+ce qui permettrait de mesurer *où* le temps/les ressources sont dépensés
+à chaque étape, pas seulement en bout de chaîne.
+
 **État actuel** : observé et consigné, comme demandé. Aucune ligne de
 code écrite — attente du retour de l'utilisateur sur la validation
 d'`ollama` seul et de la fusion dans `main` avant toute reprise de ce
