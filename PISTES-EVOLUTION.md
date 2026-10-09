@@ -559,6 +559,104 @@ fusionnée dans `main` — avant d'attaquer les points 7/8/9, pas après.
 prévue après validation et fusion d'`ollama` seul dans `main`, avant les
 points 7/8/9.
 
+## 11. Axes de consolidation du modèle actuel — validés par l'utilisateur, à traiter avant les points 7/8/9
+
+**Séquencement décidé** : l'utilisateur a validé ces six axes comme
+priorité immédiate, **avant** de reprendre les pistes Laya (points
+7/8/9) — consolider d'abord le socle `ollama` plutôt que d'empiler de
+nouveaux mécanismes dessus. Les points 7/8/9 restent une source
+d'inspiration pour la suite, pas abandonnés — juste après celui-ci dans
+l'ordre de reprise.
+
+### 11.1 Vérifier l'orchestration elle-même avant d'empiler dessus
+
+**Constat** : l'exécution réelle d'un `.workflow.json` par `dsh-workflow`
+(plusieurs étapes enchaînées, pas un script isolé) n'a jamais été
+vérifiée de bout en bout en conditions réelles — seuls les scripts
+individuels qu'un workflow appelle l'ont été, chacun isolément (voir
+`documentation/historique-du-projet.md`, section "Non vérifiable").
+Construire les pistes 7/8/9 sur une couche d'orchestration jamais
+confirmée reviendrait à bâtir sur une hypothèse, pas un fait vérifié.
+
+**Recommandation** : avant toute reprise des pistes Laya, faire tourner
+`03-workflows/systeme-auto-ameliorant-avec-controle.workflow.json` pour
+de vrai sur la machine cible et confirmer qu'il s'exécute comme écrit
+(boucle, sorties, repli délibératif inclus).
+
+### 11.2 Réduire le coût de contexte à chaque tour
+
+**Constat** : les 27 skills de `01-skills/` (en langage naturel) et le
+catalogue d'outils de `dsh` sont vraisemblablement injectés en entier à
+chaque message, pas seulement ceux pertinents pour la demande en cours —
+le même problème que `decision-rapide.js` contourne déjà en parlant
+directement à Ollama plutôt que de passer par `dsh` (voir
+`documentation/historique-du-projet.md`, "Optimisation Mac Mini M4",
+~14 700 tokens de schémas d'outils pour une tâche triviale). Sur un
+modèle local, ce coût pèse sur le temps de traitement du prompt à
+*chaque* tour, qu'un outil serve ou non.
+
+**Recommandation** : c'est le levier le plus direct pour une IAlocale
+"efficace en fonction du contexte" — charger seulement les skills
+pertinents pour la demande plutôt que le catalogue entier
+systématiquement. Rejoint directement la piste 8 (Laya en routeur de
+prompt) : son apport le plus concret et mesurable n'est peut-être pas
+"réduire les hallucinations" (hypothèse non vérifiée, voir point 8) mais
+réduire ce coût de contexte — à garder en tête quand cette piste sera
+reprise.
+
+### 11.3 Ne pas faire confiance aveuglément à la confiance auto-déclarée
+
+**Constat** : tout l'édifice `--seuil-confiance` (`decision-rapide.js`,
+moteurs `ollama` et `laya` confondus) repose sur le modèle qui
+s'auto-évalue dans la même réponse qui contient sa décision — un biais
+de sur-confiance documenté chez les LLM, pas une mesure indépendante.
+
+**Recommandation** : `journal-desaccords.js` accumule déjà la matière
+pour vérifier empiriquement si cette confiance auto-déclarée est bien
+calibrée (corrèle-t-elle avec le fait d'avoir eu raison, une fois la
+comparaison délibérative connue ?) — jusqu'ici pensé seulement comme
+préparation à un futur fine-tuning de `laya` (voir point "Vers une
+amélioration de Laya par l'usage" dans `skill-journal-desaccords.md`),
+mais la même question de calibration se pose pour `ollama` et n'est
+consignée nulle part ailleurs.
+
+### 11.4 Mesurer avant d'annoncer une amélioration
+
+Déjà couvert en détail au point 10 — répété ici comme axe de
+consolidation à part entière : sans chiffres de référence sur l'état
+actuel (temps, ressources, justesse), aucune évolution future
+n'est vérifiable autrement que par impression.
+
+### 11.5 Activer ce qui existe déjà mais reste inutilisé
+
+**Constat** : `01-skills/skill-comparateur-scenarios.md` (formule deux
+approches concrètes pour une tâche récurrente, les évalue avec
+`skill-evaluateur`, garde la gagnante et l'affine par petites variations)
+est déjà construit et documenté (voir point 4 ci-dessus) mais "jamais
+observé en conditions réelles".
+
+**Recommandation** : une fois le socle stabilisé, le brancher sur
+quelques tâches récurrentes réelles serait un gain concret pour
+améliorer "le modèle actuel" dans la durée, sans rien inventer de
+nouveau — l'outil existe, il manque seulement l'usage.
+
+### 11.6 Rendre traçable quel skill a réellement été engagé
+
+**Constat** : les skills n'ont aucune instrumentation — impossible
+aujourd'hui de vérifier après coup si le bon skill s'est déclenché pour
+un type de demande donné.
+
+**Recommandation** : un log léger, même principe que `dsh-logger.js`
+(déjà utilisé partout ailleurs dans `04-scripts/`), rendrait ça
+auditable. Rejoint directement l'exigence posée au point 9 sur le
+marquage fiable des 8 étapes — un même mécanisme de traçabilité pourrait
+servir les deux besoins plutôt que d'en construire deux séparés.
+
+**État actuel** : six axes validés par l'utilisateur comme priorité
+immédiate. Aucune ligne de code écrite — attente du retour utilisateur
+sur les tests d'`ollama` seul et de la fusion dans `main` avant de
+commencer concrètement l'un de ces six axes.
+
 ---
 
 Aucune de ces pistes n'a de code associé pour l'instant — ce fichier existe
