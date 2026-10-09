@@ -657,6 +657,51 @@ immédiate. Aucune ligne de code écrite — attente du retour utilisateur
 sur les tests d'`ollama` seul et de la fusion dans `main` avant de
 commencer concrètement l'un de ces six axes.
 
+## 12. Savoir dire « je ne sais pas » — sans s'arrêter là
+
+**Demandé par l'utilisateur** : donner à IAlocale la capacité explicite
+de dire « je ne sais pas » quand c'est vraiment le cas — **sans que ça
+ferme la conversation** : ça n'empêche pas d'ouvrir sur d'autres
+dimensions, d'autres axes, d'autres approches ou points de vue. **À
+ajouter plus tard**, le temps que l'utilisateur vérifie d'abord le
+fonctionnement actuel — rien à coder maintenant.
+
+**Ce qui existe déjà et s'en approche, sans le couvrir entièrement** :
+- `01-skills/skill-raisonnement-scientifique.md` demande déjà de
+  distinguer fait vérifié / hypothèse / opinion, de quantifier
+  l'incertitude plutôt que de l'occulter, et pose la règle d'or "un
+  raisonnement scientifique... cherche à ne pas se tromper sans le
+  savoir" — mais son déclencheur est scopé aux "question[s] de logique,
+  de sciences, ou nécessitant un raisonnement rigoureux", pas à toute
+  conversation.
+- `06-data/personnalite/valeurs.md` pose déjà, parmi les valeurs
+  vis-à-vis de l'utilisateur, "dire clairement quand quelque chose ne va
+  pas plutôt que de le masquer" — le même principe d'honnêteté, mais
+  tourné vers les erreurs/problèmes, pas explicitement vers les limites
+  de connaissance de l'agent lui-même.
+- Rien dans le dépôt ne couvre aujourd'hui la seconde moitié de la
+  demande : **rebondir** après un "je ne sais pas" vers d'autres pistes
+  plutôt que de laisser un silence ou une fin de non-recevoir — un "je
+  ne sais pas, mais voici ce qu'on pourrait explorer" plutôt qu'un simple
+  refus.
+
+**Ce qui restera à trancher à la reprise** (pas maintenant) :
+- Étendre le déclenchement de `skill-raisonnement-scientifique.md`
+  au-delà des questions scientifiques/logiques, ou ajouter un principe
+  général à `valeurs.md` qui s'applique partout ? Les deux fichiers n'ont
+  pas le même statut dans ce projet (un skill = méthode invocable, une
+  valeur = principe directeur toujours actif) — le bon choix dépend de
+  si ce comportement doit être systématique ou déclenché au cas par cas.
+- Comment articuler ça avec `--seuil-confiance` de `decision-rapide.js`
+  (déjà un mécanisme d'escalade quand la confiance est basse, mais
+  interne/rapide, pas une réponse formulée à l'utilisateur) : un lien
+  naturel existe entre "la décision rapide n'est pas fiable" et "le dire
+  honnêtement plutôt que de trancher quand même", à expliciter le moment
+  venu plutôt qu'à deviner maintenant.
+
+**État actuel** : idée consignée, explicitement différée par
+l'utilisateur. Aucune ligne de code écrite.
+
 ---
 
 Aucune de ces pistes n'a de code associé pour l'instant — ce fichier existe
