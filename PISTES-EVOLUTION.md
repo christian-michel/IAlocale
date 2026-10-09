@@ -376,6 +376,94 @@ routage proprement dite) :
 
 **État actuel** : pas commencé, aucune ligne de code écrite.
 
+## 9. Modèle de référence fourni par l'utilisateur : le traitement d'un prompt en 8 étapes
+
+**Source** : un document (PDF) partagé par l'utilisateur — lui-même un
+jeu de diapositives générique décrivant comment un assistant IA traite
+une requête, étape par étape, avec en commentaire systématique l'idée
+d'évaluer à chaque étape si `laya` pourrait y contribuer. Consigné ici
+comme référence à relire quand les pistes 7/8 (et au-delà) seront
+reprises — pas un plan d'implémentation en 8 modules.
+
+**Les 8 étapes du modèle de référence**, telles que présentées :
+1. **Assembler le contexte** — instructions système, outils/skills,
+   contexte personnel, historique, message, fichiers/résultats d'outils.
+2. **Tokeniser & calculer** — détail d'infrastructure du modèle, hors
+   périmètre de ce que ce projet peut influencer directement.
+3. **Comprendre** — extraire intention, contraintes, références
+   implicites, ton/registre, ambiguïté, contexte personnel ("ICRATP").
+4. **Classer la demande** — sept familles (conversation, savoir stable,
+   info actuelle, données perso, livrable, action différée, sujet
+   sensible), chacune avec un traitement typique associé. Une étape
+   "4 bis" annexe précise en plus *où la réponse va vivre* (réponse
+   directe, fichier, artefact type, code, ou clarification d'abord si
+   trop ambigu).
+5. **Évaluer les risques** — jugement intégré (refus net / prudence et
+   cadrage / contraintes de forme), pas un filtre séparé plaqué après
+   coup.
+6. **Planifier & agir** — la boucle agentique (réfléchir → appeler un
+   outil → lire le résultat → ajuster le plan, jusqu'à ce que le
+   résultat soit prêt). **C'est l'étape sur laquelle le travail déjà
+   fait sur IAlocale s'est le plus concentré jusqu'ici**, selon
+   l'utilisateur.
+7. **Rédiger** — adapter langue/registre, longueur, structure, sources
+   et honnêteté sur l'incertitude au besoin réel plutôt qu'à un format
+   figé.
+8. **Vérifier & livrer** — contrôler faits, calculs, documents, visuels,
+   avant la livraison proprement dite.
+
+Quatre points de synthèse ("à retenir") : c'est un **réseau, pas un
+organigramme** (les étapes décrivent un comportement appris, pas des
+modules séparés qui s'enchaînent mécaniquement) ; **le contexte fait
+tout** (instructions, outils et historique déterminent ce qui est
+possible/dû) ; **le format suit l'usage**, pas l'inverse ; le
+comportement reste **probabiliste** (un même prompt peut produire des
+réponses différentes, d'où l'intérêt de vérifier).
+
+**Mise en correspondance avec IAlocale, donnée par l'utilisateur** :
+- **Étape 8 (Vérifier & livrer)** correspond à ce qu'`01-skills/skill-
+  controleur-qualite.md` fait déjà — avec un ajout explicite : *un
+  second agent qui contrôle la manière dont l'agent de contrôle a fait
+  son travail, ainsi que la conformité de la réponse avec l'attendu*.
+  C'est exactement le rôle déjà construit par `01-skills/skill-
+  controleur-de-controle.md` (double contrôle) — confirme que cette
+  partie de l'architecture existante correspond déjà au modèle de
+  référence, rien de nouveau à construire ici.
+- **Étape 6 (Planifier & agir / boucle agentique)** est, selon
+  l'utilisateur, celle sur laquelle le travail passé sur IAlocale a le
+  plus porté (voir `04-scripts/boucle-hook-stop.js`,
+  `04-scripts/boucle-surveillance.sh`, `01-skills/skill-boucles-
+  agentiques.md`).
+- **Le fil rouge Laya** (répété après chaque étape dans le document
+  source, mot pour mot identique à ce qui a déjà été discuté et
+  consigné aux points 7 et 8 ci-dessus) : évaluer, à *chacune* des 8
+  étapes, si `laya` pourrait y contribuer — pas seulement au point
+  d'entrée (classement de la demande, étape 4) ou pour déléguer une
+  sous-tâche (point 7), mais potentiellement aussi pour l'évaluation
+  des risques (étape 5, elle aussi une décision assez fermée par
+  nature) ou pour le choix du format de sortie (étape 4 bis). Rien de
+  neuf par rapport aux points 7/8 dans le mécanisme lui-même ; ce qui
+  est nouveau, c'est le cadre des 8 étapes pour situer *où* ces
+  évaluations pourraient s'insérer.
+
+**Objectif final tel que formulé par l'utilisateur** (dernière page du
+document) : *"reproduire au mieux ce système en local avec
+l'orchestrateur, les skills, les plugins, le LLM et Laya."* — cohérent
+avec la mission déjà posée dans `README.md`, maintenant rattachée
+explicitement à ce modèle de référence en 8 étapes.
+
+**Remarque à garder pour la reprise** : le point "à retenir" n°1 du
+document source ("un réseau, pas un organigramme") met en garde contre
+une lecture trop littérale — ces 8 étapes décrivent un comportement, pas
+une liste de modules à coder un par un dans l'ordre. À utiliser comme
+grille de lecture pour auditer ce qu'`01-skills/` couvre déjà et ce qui
+manque, pas comme plan d'implémentation séquentiel.
+
+**État actuel** : observé et consigné, comme demandé. Aucune ligne de
+code écrite — attente du retour de l'utilisateur sur la validation
+d'`ollama` seul et de la fusion dans `main` avant toute reprise de ce
+chantier (points 7, 8 et 9).
+
 ---
 
 Aucune de ces pistes n'a de code associé pour l'instant — ce fichier existe
