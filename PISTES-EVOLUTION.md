@@ -583,6 +583,14 @@ confirmée reviendrait à bâtir sur une hypothèse, pas un fait vérifié.
 de vrai sur la machine cible et confirmer qu'il s'exécute comme écrit
 (boucle, sorties, repli délibératif inclus).
 
+**Mise à jour (2026-10-10, round 23 de `documentation/historique-du-
+projet.md`)** : préalable fait — `suite-tests-reelle.sh` passe 3 fois
+de suite sans faute (après désactivation de `tool-goal` et ajout de
+D.15). **Le workflow lui-même n'a toujours pas été exécuté** : c'est
+la suite du 11.1. Restent aussi ouverts : la non-persistance au
+redémarrage (mémoire GPU, contexte) et l'effet réel des désactivations
+d'outils sur le profil `web`.
+
 ### 11.2 Réduire le coût de contexte à chaque tour
 
 **Constat** : les 27 skills de `01-skills/` (en langage naturel) et le

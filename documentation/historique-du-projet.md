@@ -1703,6 +1703,102 @@ qui veut continuer à l'essayer en observant le résultat, mais ne sera
 plus jamais invoqué automatiquement tant que ce plantage n'est pas
 compris.
 
+### Round 23 — premiers 3 passages sans faute consécutifs (2026-10-10)
+
+Début du point 11.1 de `PISTES-EVOLUTION.md`. Passage initial de
+`suite-tests-reelle.sh` : **6 échecs** (A.1, A.2, A.3, D.14 ×2, C.7) —
+exactement le tableau du round 14. Cause : la machine avait redémarré
+quelques heures plus tôt, `iogpu.wired_limit_mb` était retombé à 0 et
+Ollama servait un contexte de 4096 (round 15). **Ce n'est pas un
+problème nouveau, mais il reste entier** : le socle ne survit toujours
+pas à un redémarrage.
+
+**Deux pièges de remise en état, trouvés en pratique :**
+- `setup-local-model.sh` lancé via `!` depuis Claude Code (pas de vrai
+  terminal) : le contexte est bien réglé, mais le `sudo sysctl` de la
+  mémoire GPU échoue (`a terminal is required to read the password`).
+  Il a fallu lancer `sudo sysctl iogpu.wired_limit_mb=22528` à la main
+  dans Terminal.app.
+- Relever la limite GPU ne s'applique pas au modèle **déjà chargé** :
+  il restait à 18 % CPU / 82 % GPU (22 Go, plus que l'ancienne limite)
+  jusqu'à un `ollama stop` puis rechargement → 100 % GPU, 21 Go. Le
+  débordement CPU a rendu un passage complet ~40 min au lieu de ~5.
+
+**Cause identifiée n° 1 — `update_goal` sur des objectifs inventés.**
+Les traces de session (`~/.dsh/sessions/.../session.v4.jsonl.zstd`,
+décompressées avec `zstd -dqc`) montrent `qwen3-coder` appeler
+`update_goal` avec un `goal_id` inventé pour "clôturer" un objectif
+jamais créé → `Error: no current goal`, puis tours supplémentaires —
+jusqu'à 30 min pour 3a. Les `update_goal`/`create_goal` des rounds
+14/15/17 étaient le même mécanisme. **Corrigé** : nouveau script
+`04-scripts/desactiver-outils-objectifs.sh` (même principe que
+`desactiver-recherche-web-cloud.sh`, branché dans le bootstrap, étape
+12), contrôle A.5 ajouté à la suite. Vérifié dans le `request/header`
+d'une session : `create_goal`/`get_goal`/`update_goal` ne sont plus
+proposés au modèle.
+
+**Cause identifiée n° 2 — la balise `<tool_call>` vide en fin de
+réponse.** Une fois la cause n° 1 corrigée, D.14 échouait encore sur
+une seule forme : la réponse finale se termine par `<tool_call>`, sans
+rien après, alors que le travail est réellement fait (livrables sur
+disque, verdict consigné). Reproduit **hors de `dsh`**, en rejouant la
+dernière étape d'une session directement contre Ollama
+(`/v1/chat/completions` en streaming, comme `dsh`) : le modèle émet le
+jeton `<tool_call>` puis la génération s'arrête aussitôt
+(`finish_reason: "stop"`), sans contenu d'appel — Ollama n'a rien à
+parser et renvoie la balise en texte. Fréquence mesurée : ~15-20 % des
+réponses finales (4/20, 3/20, 4/20 selon les séries). **Écarté par
+mesure, pas par supposition** : retirer `todo_write` (3/20),
+température 0.2 (2/20), consigne explicite dans le prompt système
+(8/20 — pire : nommer la balise semble l'amorcer). Comportement du
+modèle quantifié lui-même, pas de `dsh` ni du contexte.
+
+**Décision de l'utilisateur : affiner D.14 plutôt que de compter sur
+la chance.** Un vrai appel d'outil brut (`<function=…>`,
+`<parameter=…>`) reste un **échec** ; une balise `<tool_call>` vide,
+seule, en toute fin de texte, devient un **avertissement** — mais
+seulement si le nouveau contrôle **D.15** confirme que le livrable
+existe sur disque (discipline du round 19, désormais automatique).
+Logique vérifiée contre 5 dossiers de résultats passés : chacun classé
+comme attendu (les fuites réelles du 7 octobre restent des échecs).
+
+**Résultat : 3 passages consécutifs sans faute**
+(`logs/validation-20261010T181631Z`, `…182648Z`, `…183345Z`) — 0 échec
+**et 0 avertissement** : la tolérance de D.14 n'a même pas servi.
+Chaque passage : A.1-A.5 verts (100 % GPU, contexte 32768), décisions
+rapides justes (3/3), livrables 3a/3b présents, verdicts consignés
+(C.7), 5a fusionnée, 5b rejetée. Les 10 sessions `dsh` de la série
+relues : **aucune fuite d'appel d'outil, même en cours de tâche** (ce
+que D.14, limité au texte final, ne voit pas). Un passage préalable
+avait aussi 0 échec mais n'a pas été compté : 5a y renvoyait
+`DEJA_A_JOUR` (skill de test oublié dans le dépôt après un passage
+précédent — erreur de manipulation, pas du projet).
+
+**Ce qui reste, honnêtement :**
+- **Le cœur du 11.1 n'est pas encore fait** : `suite-tests-reelle.sh`
+  ne lance jamais un `.workflow.json` via `dsh-workflow`. L'exécution
+  de bout en bout de
+  `systeme-auto-ameliorant-avec-controle.workflow.json` reste non
+  vérifiée.
+- **Non-persistance au redémarrage** (mémoire GPU, contexte) : toujours
+  là, et le script de remise en état ne peut pas appliquer la partie
+  `sudo` hors d'un vrai terminal.
+- **Profil `web` non vérifié** : contrairement à `headless`, il compose
+  ses sessions à partir de préréglages d'agent (`preset-standard`,
+  `preset-ptc`, `preset-cordis`…) qui listent chacun `tool-web` et
+  `tool-goal` dans leurs propres plugins. Des sessions du 7 octobre
+  (après le correctif du round 12) proposaient encore
+  `web_search`/`web_fetch` au modèle. La désactivation au niveau racine
+  ne suffit donc probablement pas pour `web` — ni pour `tool-web`
+  depuis le round 12, ni pour `tool-goal` maintenant. À vérifier en
+  lançant une vraie session `web`.
+- Le modèle appelle encore parfois un skill comme s'il s'agissait d'un
+  outil (`controle-qualite`, `analyse-objectifs` → `unknown tool`), et
+  se rattrape seul via le vrai outil `skill`. Sans effet sur le
+  résultat, mais des tours perdus.
+- 3 passages propres d'affilée sont un bon signal, pas une preuve de
+  fiabilité à 100 % (même mise en garde qu'au round 19).
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée
@@ -1784,6 +1880,7 @@ dsh-harness/
 │   ├── basculer-modele.sh             # bascule entre profils de 05-configs/modeles.yaml (testé)
 │   ├── configurer-skills-dsh.sh       # déclare 01-skills/ à dsh (customSkillDirs, testé)
 │   ├── desactiver-recherche-web-cloud.sh  # désactive l'outil web câblé sur l'API cloud DeepSeek (testé)
+│   ├── desactiver-outils-objectifs.sh     # désactive create/get/update_goal, appelés sur des objectifs inventés (testé, round 23)
 │   ├── security-check.sh
 │   │ # Confort au quotidien (optionnels)
 │   ├── creer-raccourci-lancement.sh   # icône .app double-cliquable (testé)
