@@ -14,7 +14,8 @@
 #      fois, invalidé silencieusement tout le reste (voir documentation/historique-du-projet.md) :
 #      A.1 contexte Ollama réellement servi, A.2 mémoire GPU
 #      (iogpu.wired_limit_mb), A.3 dsh voit les skills du dépôt,
-#      A.4 l'outil de recherche web cloud est désactivé
+#      A.4 l'outil de recherche web cloud est désactivé, A.5 les
+#      outils d'objectif (create/get/update_goal) sont désactivés
 #   1. Validation syntaxique déterministe (skills/workflows)
 #   2. decision-rapide.js sur 3 domaines (code, juridique, comptable),
 #      contre ton vrai modèle configuré
@@ -29,12 +30,16 @@
 #      été consigné sur les tâches 3a/3b (pas juste une trace générique)
 #   D.14. Détection d'une syntaxe d'appel d'outil malformée qui aurait
 #      fuité dans le texte final de 3a/3b, au lieu d'un vrai tool_call
+#      (une balise <tool_call> vide seule en toute fin de texte, livrables
+#      présents, n'est qu'un avertissement — voir round 23)
+#   D.15. Livrables de 3a/3b réellement présents sur disque (pas
+#      seulement annoncés dans la narration du modèle — voir round 19)
 #   5. Auto-implementer.js : un cas qui doit fusionner, un cas qui doit
 #      être refusé — sur un fichier clairement jetable, sans risque pour
 #      le reste du dépôt
 #
 # Contrairement aux sections historiques (1 à 5, purement informatives),
-# les contrôles A/C.7/D.14 affirment un résultat attendu : le script
+# les contrôles A/C.7/D.14/D.15 affirment un résultat attendu : le script
 # sort en code 1 si l'un d'eux échoue, en 0 sinon.
 #
 # Usage : ./04-scripts/suite-tests-reelle.sh
@@ -56,12 +61,19 @@ journal() { echo "$1" | tee -a "$DOSSIER/resume.txt"; }
 
 # Compteur d'échecs réels : contrairement aux sections historiques de ce
 # script (purement informatives — "note ce que tu vois"), les contrôles
-# A/C.7/D.14 ci-dessous affirment un résultat attendu et comptent comme
-# échec s'il n'est pas atteint. Le code de sortie du script en dépend.
+# A/C.7/D.14/D.15 ci-dessous affirment un résultat attendu et comptent
+# comme échec s'il n'est pas atteint. Le code de sortie du script en
+# dépend. Les avertissements sont comptés et affichés au bilan, mais ne
+# changent pas le code de sortie.
 ECHECS=0
 signaler_echec() {
     ECHECS=$((ECHECS + 1))
     journal "   ❌ ÉCHEC : $1"
+}
+AVERTISSEMENTS=0
+signaler_avertissement() {
+    AVERTISSEMENTS=$((AVERTISSEMENTS + 1))
+    journal "   ⚠️  AVERTISSEMENT : $1"
 }
 
 journal "=== Protocole de validation — $HORODATAGE ==="
@@ -132,6 +144,13 @@ if echo "$SORTIE_DUMP" | grep -A10 "id: tool-web" | grep -q "disabled: true"; th
     journal "     ✅ tool-web désactivé (pas d'appel possible vers l'API cloud DeepSeek)"
 else
     signaler_echec "A.4 : tool-web ne semble pas désactivé — relance ./04-scripts/desactiver-recherche-web-cloud.sh (voir documentation/historique-du-projet.md round 12)."
+fi
+
+journal "  A.5. Outils d'objectif (create/get/update_goal) désactivés"
+if echo "$SORTIE_DUMP" | grep -A3 "^- id: tool-goal" | grep -q "disabled: true"; then
+    journal "     ✅ tool-goal désactivé (plus d'update_goal sur un objectif inventé)"
+else
+    signaler_echec "A.5 : tool-goal ne semble pas désactivé — relance ./04-scripts/desactiver-outils-objectifs.sh (voir documentation/historique-du-projet.md round 23)."
 fi
 journal ""
 
@@ -213,11 +232,57 @@ dsh --profile headless "Crée un thème WordPress minimal nommé test (style.css
     2>&1 | tee "$DOSSIER/3b-wordpress-sortie.txt"
 journal ""
 
+# D.15 avant D.14 : D.14 a besoin de savoir si le travail existe vraiment
+# sur disque pour trancher entre échec et simple avertissement.
+journal "  D.15. Livrables réellement présents sur disque"
+LIVRABLES="$DOSSIER/livrables"
+LIVRABLE_3A_OK=0
+LIVRABLE_3B_OK=0
+if grep -qi '<!DOCTYPE html' "$LIVRABLES/test-html5.html" 2>/dev/null; then
+    LIVRABLE_3A_OK=1
+fi
+if grep -q 'Theme Name: test' "$LIVRABLES/theme-test/style.css" 2>/dev/null \
+    && [ -s "$LIVRABLES/theme-test/index.php" ] && [ -s "$LIVRABLES/theme-test/functions.php" ]; then
+    LIVRABLE_3B_OK=1
+fi
+for TACHE in 3a 3b; do
+    if [ "$TACHE" = "3a" ]; then OK=$LIVRABLE_3A_OK; ATTENDU="test-html5.html avec <!DOCTYPE html>"
+    else OK=$LIVRABLE_3B_OK; ATTENDU="theme-test/{style.css avec 'Theme Name: test', index.php, functions.php}"; fi
+    if [ "$OK" -eq 1 ]; then
+        journal "     ✅ $TACHE : $ATTENDU présent(s)"
+    elif [ "${AUTORISER_ECRITURE_HEADLESS:-}" = "1" ]; then
+        signaler_echec "D.15 : $TACHE — livrable attendu absent ou incomplet ($ATTENDU), quoi qu'en dise la narration du modèle."
+    else
+        journal "     (ℹ️  $TACHE : livrable absent — attendu sans AUTORISER_ECRITURE_HEADLESS=1, pas compté comme échec)"
+    fi
+done
+journal ""
+
 journal "  D.14. Détection de syntaxe d'appel d'outil malformée dans les réponses"
+# Deux cas distincts, trouvés en pratique (voir documentation/historique-
+# du-projet.md, rounds 15/16 et 23) :
+#  - un vrai appel d'outil brut (<function=...>, <parameter=...>) a fuité
+#    en texte au lieu d'être exécuté — la tâche n'a souvent pas été faite :
+#    ÉCHEC ;
+#  - une balise <tool_call> vide, seule, en toute fin de réponse : le
+#    modèle émet ce jeton puis s'arrête aussitôt (finish_reason "stop",
+#    reproduit hors de dsh directement contre Ollama, ~15-20 % des
+#    réponses finales). Rien n'a été perdu — AVERTISSEMENT seulement, et
+#    uniquement si D.15 confirme que le livrable existe bien.
 PROBLEME_D14=0
 for FICHIER in "$DOSSIER/3a-html5-sortie.txt" "$DOSSIER/3b-wordpress-sortie.txt"; do
-    if grep -qE '<function=|<tool_call>|<parameter=' "$FICHIER" 2>/dev/null; then
-        signaler_echec "D.14 : syntaxe d'appel d'outil malformée détectée dans $(basename "$FICHIER") — glitch de template connu (voir documentation/historique-du-projet.md), un appel d'outil brut a fuité dans le texte final au lieu d'être exécuté."
+    NOM=$(basename "$FICHIER")
+    if [ "$NOM" = "3a-html5-sortie.txt" ]; then LIVRABLE_OK=$LIVRABLE_3A_OK; else LIVRABLE_OK=$LIVRABLE_3B_OK; fi
+    if grep -qE '<function=|<parameter=' "$FICHIER" 2>/dev/null; then
+        signaler_echec "D.14 : appel d'outil brut (<function=/<parameter=) détecté dans $NOM — glitch de template connu (voir documentation/historique-du-projet.md), un appel d'outil a fuité dans le texte final au lieu d'être exécuté."
+        PROBLEME_D14=1
+    elif grep -q '<tool_call>' "$FICHIER" 2>/dev/null; then
+        NB_BALISES=$(grep -o '<tool_call>' "$FICHIER" | wc -l | tr -d ' ')
+        if [ "$NB_BALISES" -eq 1 ] && grep -v '^[[:space:]]*$' "$FICHIER" | tail -1 | grep -qE '<tool_call>[[:space:]]*$' && [ "$LIVRABLE_OK" -eq 1 ]; then
+            signaler_avertissement "D.14 : balise <tool_call> vide en toute fin de $NOM (jeton émis puis arrêt immédiat du modèle, voir round 23) — livrable vérifié présent, rien de perdu."
+        else
+            signaler_echec "D.14 : balise <tool_call> détectée dans $NOM ailleurs qu'en simple fin de texte, ou sans livrable vérifié sur disque (voir documentation/historique-du-projet.md, round 23)."
+        fi
         PROBLEME_D14=1
     fi
 done
@@ -316,10 +381,13 @@ journal "Envoie le contenu de $DOSSIER/ pour analyse de cohérence, de pertinenc
 journal "et pour identifier les causes de tout écart avec le résultat attendu."
 journal ""
 
+if [ "$AVERTISSEMENTS" -gt 0 ]; then
+    journal "=== $AVERTISSEMENTS avertissement(s) — voir le détail ⚠️ ci-dessus (n'affecte pas le code de sortie) ==="
+fi
 if [ "$ECHECS" -eq 0 ]; then
-    journal "=== Bilan : 0 échec sur les contrôles A/C.7/D.14 ==="
+    journal "=== Bilan : 0 échec sur les contrôles A/C.7/D.14/D.15 ==="
     exit 0
 else
-    journal "=== Bilan : $ECHECS échec(s) sur les contrôles A/C.7/D.14 — voir le détail ❌ ci-dessus ==="
+    journal "=== Bilan : $ECHECS échec(s) sur les contrôles A/C.7/D.14/D.15 — voir le détail ❌ ci-dessus ==="
     exit 1
 fi

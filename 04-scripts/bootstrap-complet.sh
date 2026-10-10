@@ -22,7 +22,7 @@ export HARNESS_HOME
 
 # `set -u` sans `-e` volontairement : un prérequis manquant ne doit pas
 # arrêter le script immédiatement — on veut voir TOUS les problèmes en un
-# seul passage (étapes 1 à 11), pas s'arrêter au premier et faire relancer
+# seul passage (étapes 1 à 12), pas s'arrêter au premier et faire relancer
 # le script autant de fois qu'il y a d'étapes en échec. `echec()` compte
 # plutôt qu'il n'arrête ; le code de sortie final (tout en bas) reflète
 # s'il y a eu au moins un échec.
@@ -125,6 +125,9 @@ etape "10. Skills de ce dépôt déclarés à dsh"
 
 etape "11. Outil de recherche web cloud désactivé"
 ./04-scripts/desactiver-recherche-web-cloud.sh || echec "desactiver-recherche-web-cloud.sh a échoué"
+
+etape "12. Outils d'objectif (create/get/update_goal) désactivés"
+./04-scripts/desactiver-outils-objectifs.sh || echec "desactiver-outils-objectifs.sh a échoué"
 
 echo ""
 if [ "$ECHECS" -eq 0 ]; then

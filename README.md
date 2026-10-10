@@ -99,6 +99,10 @@ dsh --profile headless 'Explique-moi ce que fait 04-scripts/dsh-logger.js'
 
 # 6. Désactiver l'outil de recherche web natif de dsh (câblé sur l'API cloud DeepSeek)
 ./04-scripts/desactiver-recherche-web-cloud.sh
+
+# 7. Désactiver les outils d'objectif de dsh (create/get/update_goal),
+#    que le modèle appelle sur des objectifs inventés
+./04-scripts/desactiver-outils-objectifs.sh
 ```
 
 ⚠️ **Deux réglages ne survivent pas à un redémarrage de la machine**
