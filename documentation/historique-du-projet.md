@@ -1799,6 +1799,133 @@ précédent — erreur de manipulation, pas du projet).
 - 3 passages propres d'affilée sont un bon signal, pas une preuve de
   fiabilité à 100 % (même mise en garde qu'au round 19).
 
+### Round 24 — les workflows JSON n'étaient exécutés par rien ; migration vers le moteur natif (2026-10-11/12)
+
+Suite du point 11.1 de `PISTES-EVOLUTION.md` : exécuter pour de vrai
+`systeme-auto-ameliorant-avec-controle`.
+
+**Constat de départ, vérifié :** aucun composant de `dsh` n'exécute le
+format JSON déclaratif de `03-workflows/` (`steps`, `loop`,
+`agent.type`). L'outil `workflow` natif (`@deepseek-ai/dsh-tool-workflow`,
+moteur `@deepseek-ai/dsh-workflow`) exécute des **scripts JavaScript**
+(`agent()`, `parallel()`, `pipeline()`, `phase()`, `log()`). Le paquet
+tiers `dsh-workflow` qu'`install-plugins.sh` tente d'ajouter n'a **jamais
+été installé** (logs du gestionnaire de plugins : `pnpm` absent du 29/09
+au 05/10, puis « incompatible with dsh 0.1.7-rc.2 ») — et ce n'est de
+toute façon qu'une interface graphique, dont les définitions sont elles
+aussi des scripts JS. Les 5 workflows JSON n'ont donc jamais pu tourner.
+Décision de l'utilisateur : migrer vers le moteur natif.
+
+**Migration** : `systeme-auto-ameliorant-avec-controle.workflow.js`.
+Pas de registre de workflows dans le moteur : les sous-workflows
+(`meta-experimentation`, `recherche-approfondie`, `controle-qualite`,
+`auto-amelioration`) deviennent des fonctions du même script. Testé à
+blanc (`agent()` & co simulés, scénarios : chemin heureux, boucle
+jusqu'à `max_iterations`, repli délibératif, chaîne d'échec complète
+jusqu'à l'auto-implémentation, erreurs explicites). Bug latent de la
+définition JSON au passage : avec une seule expérimentation,
+`journal-desaccords.js` refuse `--choix "0"` (au moins deux options) —
+le choix est désormais trivial (`methode: "unique"`).
+
+**Faire tourner le script — trois obstacles successifs :**
+1. **Le modèle doit recopier le script dans son appel d'outil**, et
+   qwen3-coder le rate : coupé net vers 8 100 caractères
+   (`stopReason: toolUse` après 3 246 tokens, sur une longue consigne
+   répétée), puis appel émis en texte brut sans `<tool_call>` (jamais
+   exécuté). Pire : un script altéré **s'exécute quand même** avant
+   toute vérification. **Solution : un plugin `dsh` local**,
+   `07-plugins/dsh-workflows-projet` (outil `workflow_projet`), calqué
+   sur `dsh-tool-workflow` : le modèle ne donne qu'un nom et des args,
+   le plugin lit le fichier et appelle `ctx.workflowEngine.start(...)`.
+   Trois détails trouvés en le branchant : une entrée `- id:` du patch
+   ne fait que modifier un plugin existant (« entry not found ») — il
+   faut une entrée `insert` ; installé par `link:`, le plugin ne résout
+   pas `@deepseek-ai/*` depuis le dépôt — il les charge depuis
+   l'installation de `dsh` qui l'exécute ; `02-plugins/` est ignoré par
+   git (clones externes), d'où `07-plugins/`.
+   `04-scripts/installer-plugin-workflows.sh` l'installe et le déclare ;
+   `04-scripts/lancer-workflow.js` le lance et vérifie **en direct**
+   l'appel du modèle (autre outil, mauvais nom ou args → `dsh` arrêté
+   avant exécution, nouvelle tentative). Le modèle a émis l'appel
+   correct du premier coup à chaque passage réel.
+2. **Option `agent()` à `undefined`** (`schema: undefined`) : refusée
+   par le moteur (« must be plain JSON data »). Corrigé ; le banc à
+   blanc reproduit désormais cette règle et l'arrêt du script.
+3. **Mémoire** : 21 Go pris par le modèle sur 24 ; le moteur lance par
+   défaut autant de sous-agents parallèles que de cœurs, chacun dans
+   un processus Node — aucun gain puisqu'Ollama traite une requête à la
+   fois. Réglé à un seul (`maxConcurrentAgents: 1`, dans
+   `installer-plugin-workflows.sh`).
+
+**Premier passage complet réel** (33 sous-agents, 2 itérations, ~58
+min ; args : seuil 11 inatteignable, `max_iterations` 2, seuil rapide
+1.01 pour forcer le repli, 2 expérimentations) :
+- ✅ **Boucle** : 2 itérations, arrêt à `max_iterations` comme écrit.
+- ✅ **Repli délibératif** : décision rapide non fiable → comparaison
+  délibérée, aux deux itérations.
+- ✅ **Contrôle qualité** exécuté (VALIDE, contre-vérification
+  CONFIRME à l'itération 1).
+- ❌ **Sorties** : la réponse finale était un appel d'outil brut
+  (`<function=skill>…`) ; contre-vérification `null` à l'itération 2.
+- ❌ **14 sous-agents sur 33** ont émis leur premier appel d'outil en
+  texte brut, sans `<tool_call>` d'ouverture.
+- ❌ **`journal-desaccords.js` n'a rien consigné** : les commandes des
+  sous-agents ne reçoivent pas `HARNESS_HOME`, le repli `~/dsh-harness`
+  est hors du dépôt, le bac à sable refuse (`EPERM`) — leurs logs étaient
+  perdus aussi (le problème du round 11, devenu bloquant). **Corrigé** :
+  `config.js` se replie désormais sur la racine du dépôt (identique pour
+  une installation clonée dans `~/dsh-harness` comme le recommande le
+  README). Vérifié au passage suivant : deux entrées réelles consignées
+  (escalade, puis accord après comparaison délibérée).
+- ❌ Des sous-agents ont écrit leurs brouillons dans le dépôt, dont
+  `01-skills/analyse-objectifs.md` sans frontmatter (aurait fait échouer
+  la validation des skills). Rangés dans le dossier de logs du passage.
+
+**Les fuites des sous-agents, mesurées plutôt que supposées** (petit
+workflow d'essai, 8 à 10 sous-agents par variante, dans un profil `dsh`
+jetable) : consigne « charge le skill X (outil skill, name: …) » →
+3/8 ; reformulée sans syntaxe → 4/8 ; méthode fournie dans la consigne
+(outils permis) → 5/8 — le sous-agent tente quand même de charger le
+skill ; méthode fournie **et** « réponds directement, sans aucun outil »
+→ **1/10**. Le défaut touche le premier appel d'outil d'un sous-agent,
+quel que soit l'outil. Appliqué : le plugin transmet le contenu des
+skills (`args.skills`), les étapes de pur raisonnement reçoivent la
+méthode sans outil, toute étape vide ou contenant un appel brut est
+retentée (3 essais), interdiction d'écrire des fichiers sauf si la
+méthode l'exige.
+
+**Second passage complet, avec ces corrections : arrêté par Claude
+Code faute de mémoire** après ~34 sous-agents (~2 h), comme une
+tentative précédente. Ce qu'il montre déjà : fuites chez ~1 sous-agent
+sur 4 (rattrapées par les nouvelles tentatives, au prix du temps) ; la
+consigne « sans aucun outil » est largement ignorée dans le vrai
+workflow (11 étapes sur 13 ont appelé des outils — la méthode des
+skills invite elle-même à consulter des fichiers) ; un sous-agent a
+encore écrit un fichier (`04-temp/`). Incident au passage : le premier
+lancement du profil jetable est parti avec la config par défaut de
+`dsh`, câblée sur l'API cloud DeepSeek — un message d'essai trivial
+(« Réponds juste OK », prompt système par défaut, aucun contenu du
+dépôt) a été envoyé et refusé (`Insufficient Balance`). Le profil a
+été configuré sur Ollama avant tout autre lancement.
+
+**Où ça en est, honnêtement :**
+- La couche d'orchestration est **vérifiée** : le moteur natif tourne
+  avec le modèle local, la boucle, le repli délibératif et le contrôle
+  qualité s'exécutent comme écrits.
+- La **qualité d'exécution** des sous-agents reste le point faible
+  (fuites, consignes ignorées, écritures non demandées), et un passage
+  complet est **long** (~1 à 3 h) — le lancer depuis une session Claude
+  Code l'expose à l'arrêt pour manque de mémoire ; à lancer depuis un
+  vrai terminal.
+- Restent en JSON, non migrés : `auto-amelioration`, `controle-qualite`,
+  `meta-experimentation`, `recherche-approfondie` (leur logique est
+  intégrée au script migré), et l'ancienne définition JSON du workflow
+  migré. Le périmètre d'auto-implémentation (`creer-workflow` →
+  `03-workflows/*.json`) et les 7 skills qui citent les fichiers JSON
+  ne sont pas encore mis à jour : laisser l'agent créer des workflows
+  `.js` reviendrait à lui permettre d'écrire du code exécutable — une
+  décision qui appartient à l'utilisateur.
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée
@@ -1847,12 +1974,16 @@ dsh-harness/
 │
 ├── 02-plugins/                # agentic-research, dsh-find-plugins (clonés à l'install, hors git)
 │
-├── 03-workflows/               # 5 workflows JSON (schéma dsh non-vérifiable formellement)
+├── 03-workflows/               # voir round 24 : les JSON ne sont exécutés par aucun composant de dsh
+│   ├── systeme-auto-ameliorant-avec-controle.workflow.js  # migré : script du moteur natif, intègre les 4 autres
 │   ├── auto-amelioration.workflow.json                  # propose → évalue → applique (auto-implementer.js)
 │   ├── controle-qualite.workflow.json                   # double contrôle
-│   ├── systeme-auto-ameliorant-avec-controle.workflow.json
+│   ├── systeme-auto-ameliorant-avec-controle.workflow.json  # ancienne définition, remplacée par le .js
 │   ├── meta-experimentation.workflow.json
 │   └── recherche-approfondie.workflow.json
+│
+├── 07-plugins/
+│   └── dsh-workflows-projet/      # outil workflow_projet : lance un workflow par son nom (round 24)
 │
 ├── 04-scripts/
 │   │ # Infrastructure (logs, mémoire, validation)
@@ -1881,6 +2012,8 @@ dsh-harness/
 │   ├── configurer-skills-dsh.sh       # déclare 01-skills/ à dsh (customSkillDirs, testé)
 │   ├── desactiver-recherche-web-cloud.sh  # désactive l'outil web câblé sur l'API cloud DeepSeek (testé)
 │   ├── desactiver-outils-objectifs.sh     # désactive create/get/update_goal, appelés sur des objectifs inventés (testé, round 23)
+│   ├── installer-plugin-workflows.sh      # installe 07-plugins/dsh-workflows-projet, 1 sous-agent à la fois (testé, round 24)
+│   ├── lancer-workflow.js                 # lance un workflow via workflow_projet, vérifie l'appel en direct (testé, round 24)
 │   ├── security-check.sh
 │   │ # Confort au quotidien (optionnels)
 │   ├── creer-raccourci-lancement.sh   # icône .app double-cliquable (testé)

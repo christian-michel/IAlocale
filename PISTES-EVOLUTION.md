@@ -591,6 +591,19 @@ la suite du 11.1. Restent aussi ouverts : la non-persistance au
 redémarrage (mémoire GPU, contexte) et l'effet réel des désactivations
 d'outils sur le profil `web`.
 
+**Mise à jour (2026-10-12, round 24)** : les workflows JSON n'étaient
+exécutés par aucun composant de `dsh`. Le workflow cible est migré vers
+le moteur natif (`.workflow.js`, lancé par le plugin local
+`07-plugins/dsh-workflows-projet` via `04-scripts/lancer-workflow.js`).
+**Vérifié en conditions réelles : boucle, repli délibératif et contrôle
+qualité s'exécutent comme écrits.** Pas encore de passage complet
+propre : la qualité d'exécution des sous-agents (appels d'outil en
+texte brut, consignes ignorées) reste le point faible, et un passage
+complet (1 à 3 h) est à lancer depuis un vrai terminal, une session
+Claude Code l'arrêtant faute de mémoire. Restent aussi à trancher : le
+sort des 5 fichiers JSON, et le périmètre d'auto-implémentation
+(`creer-workflow`) maintenant que les workflows sont du code.
+
 ### 11.2 Réduire le coût de contexte à chaque tour
 
 **Constat** : les 27 skills de `01-skills/` (en langage naturel) et le
