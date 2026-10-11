@@ -1,0 +1,13 @@
+{
+  "name": "dsh-workflows-projet",
+  "version": "0.1.0",
+  "description": "Outil dsh workflow_projet : lance un workflow de 03-workflows/ par son nom, sans que le modèle ait à recopier le script.",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "keywords": ["dsh-plugin"],
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "0.2.1-alpha.1",
+    "@deepseek-ai/dsh-workflow": "0.2.1-alpha.1"
+  }
+}

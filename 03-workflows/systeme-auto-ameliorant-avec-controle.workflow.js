@@ -1,6 +1,6 @@
 // @meta {"name":"systeme-auto-ameliorant-avec-controle","description":"Système complet auto-améliorant avec contrôle de qualité et rétro-analyse des erreurs.","phases":[{"title":"Expérimentation"},{"title":"Évaluation"},{"title":"Identification"},{"title":"Contrôle qualité"},{"title":"Synthèse"}]}
 //
-// Script pour l'outil `workflow` natif de dsh (@deepseek-ai/dsh-tool-workflow).
+// Script pour le moteur de workflows natif de dsh (@deepseek-ai/dsh-workflow).
 // Remplace l'ancienne définition JSON déclarative (steps/loop/agent.type),
 // qu'aucun composant de dsh n'exécutait — voir
 // documentation/historique-du-projet.md, round 24.
@@ -10,14 +10,13 @@
 // recherche-approfondie, controle-qualite et auto-amelioration sont
 // donc des fonctions de ce même script.
 //
-// Lancement :
-//   node 04-scripts/lancer-workflow.js 03-workflows/systeme-auto-ameliorant-avec-controle.workflow.js '{"demande":"..."}'
-// Le modèle doit recopier ce script tel quel dans son appel d'outil : les
-// lignes de commentaire entières sont retirées avant l'envoi, et le reste
-// est volontairement compact — un modèle local décroche sur un long
-// script (round 24 : recopie coupée net vers 8 100 caractères). Les
-// consignes restent brèves parce que chaque sous-agent charge le skill
-// correspondant, qui porte la méthode détaillée.
+// Lancement (le plugin 07-plugins/dsh-workflows-projet lit ce fichier tel
+// quel — le modèle ne donne que le nom et les args) :
+//   node 04-scripts/lancer-workflow.js systeme-auto-ameliorant-avec-controle '{"demande":"..."}'
+// Script volontairement compact, de l'époque où le modèle devait le
+// recopier dans son appel d'outil (round 24) ; les consignes restent
+// brèves parce que chaque sous-agent charge le skill correspondant, qui
+// porte la méthode détaillée.
 //
 // args : demande (requis), seuil_satisfaction (8.0), max_iterations (5),
 // workflows_a_tester (["recherche-approfondie"]), seuil_confiance_rapide
