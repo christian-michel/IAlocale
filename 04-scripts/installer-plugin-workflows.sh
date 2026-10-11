@@ -27,6 +27,7 @@ cd "$(dirname "$0")/.."
 RACINE="$(pwd)"
 PLUGIN="$RACINE/07-plugins/dsh-workflows-projet"
 DOSSIER_WORKFLOWS="$RACINE/03-workflows"
+DOSSIER_SKILLS="$RACINE/01-skills"
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ python3 requis pour fusionner le YAML."; exit 1; }
 python3 -c "import yaml" >/dev/null 2>&1 || { echo "❌ Module Python 'yaml' manquant. Installe-le avec : pip3 install pyyaml --break-system-packages"; exit 1; }
@@ -52,6 +53,7 @@ for PROFIL in "${PROFILS[@]}"; do
         echo "       name: dsh-workflows-projet"
         echo "       config:"
         echo "         dossier: $DOSSIER_WORKFLOWS"
+        echo "         dossierSkills: $DOSSIER_SKILLS"
         continue
     fi
 
@@ -60,11 +62,11 @@ for PROFIL in "${PROFILS[@]}"; do
         || { echo "❌ dsh plugin add a échoué pour le profil '$PROFIL'."; exit 1; }
 
     echo "🔌 Déclaration de workflow_projet dans $PATCH_FILE..."
-    python3 - "$PATCH_FILE" "$DOSSIER_WORKFLOWS" << 'PYEOF'
+    python3 - "$PATCH_FILE" "$DOSSIER_WORKFLOWS" "$DOSSIER_SKILLS" << 'PYEOF'
 import sys
 import yaml
 
-patch_path, dossier = sys.argv[1], sys.argv[2]
+patch_path, dossier, dossier_skills = sys.argv[1], sys.argv[2], sys.argv[3]
 
 with open(patch_path) as f:
     texte_brut = f.read()
@@ -80,7 +82,7 @@ if not isinstance(patch, list):
     print(f"❌ {patch_path} : format inattendu (pas une liste au niveau racine), fusion refusée.", file=sys.stderr)
     sys.exit(1)
 
-entree = {"id": "workflows-projet", "name": "dsh-workflows-projet", "config": {"dossier": dossier}}
+entree = {"id": "workflows-projet", "name": "dsh-workflows-projet", "config": {"dossier": dossier, "dossierSkills": dossier_skills}}
 # Retire une éventuelle déclaration précédente (idempotence), puis la remet.
 patch = [e for e in patch if not (isinstance(e, dict) and any(isinstance(x, dict) and x.get("id") == "workflows-projet" for x in e.get("insert", [])))]
 patch.append({"insert": [entree]})

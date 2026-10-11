@@ -14,6 +14,13 @@
  *
  * Format d'un .workflow.js : première ligne `// @meta {...}` (JSON :
  * name, description, phases), puis le corps du script.
+ *
+ * Si `dossierSkills` est configuré, le contenu des skills (sans leur
+ * frontmatter) est transmis au script dans `args.skills` ({nom: méthode}).
+ * Le script n'a pas accès aux fichiers ; ainsi un sous-agent reçoit la
+ * méthode directement dans sa consigne au lieu de devoir la charger par
+ * l'outil skill — appel qui fuitait en texte brut chez ~40 % des
+ * sous-agents (round 24 : 3/8 et 4/8 selon la formulation).
  */
 import { readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -41,6 +48,7 @@ export const name = 'workflows-projet';
 export const inject = ['tools', 'workflowEngine'];
 export const Config = z.object({
   dossier: z.string().required(),
+  dossierSkills: z.string(),
   toolName: z.string().default('workflow_projet'),
   maxResultChars: z.natural().min(1).default(5e4),
 });
@@ -65,6 +73,18 @@ function listerWorkflows(dossier) {
   }
 }
 
+/** {nom: méthode} pour chaque skill de dossierSkills (frontmatter `name:`). */
+export function lireSkills(dossierSkills) {
+  const skills = {};
+  for (const f of readdirSync(dossierSkills).filter((x) => x.endsWith('.md'))) {
+    const texte = readFileSync(path.join(dossierSkills, f), 'utf-8');
+    const m = texte.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+    const nom = m?.[1].match(/^name:\s*["']?([^"'\n]+)["']?\s*$/m)?.[1];
+    if (nom) skills[nom] = m[2].trim();
+  }
+  return skills;
+}
+
 function renderResult(nom, agentsStarted, value, maxChars) {
   const rendu = JSON.stringify(value, null, 2);
   const coupe = rendu.length > maxChars ? `${rendu.slice(0, maxChars)}\n… [tronqué : ${rendu.length - maxChars} caractères de plus]` : rendu;
@@ -72,7 +92,7 @@ function renderResult(nom, agentsStarted, value, maxChars) {
 }
 
 export function apply(ctx, config) {
-  const { dossier, toolName, maxResultChars } = config;
+  const { dossier, dossierSkills, toolName, maxResultChars } = config;
   const disponibles = listerWorkflows(dossier);
   ctx.tools.register(defineTool({
     name: toolName,
@@ -100,7 +120,8 @@ export function apply(ctx, config) {
       if (!/^[a-z0-9-]+$/.test(args.nom)) throw new Error(`${toolName} : nom invalide "${args.nom}" (lettres minuscules, chiffres et tirets uniquement)`);
       const cheminFichier = path.join(dossier, `${args.nom}${SUFFIXE}`);
       const { meta, script } = lireWorkflow(cheminFichier);
-      const run = ctx.workflowEngine.start({ script, meta, ...(args.args !== undefined ? { args: args.args } : {}), parent, signal: exec.signal });
+      const argsScript = dossierSkills ? { ...(args.args ?? {}), skills: lireSkills(dossierSkills) } : args.args;
+      const run = ctx.workflowEngine.start({ script, meta, ...(argsScript !== undefined ? { args: argsScript } : {}), parent, signal: exec.signal });
       const onAbort = () => run.cancel('parent step aborted');
       exec.signal.addEventListener('abort', onAbort, { once: true });
       try {
