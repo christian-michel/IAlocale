@@ -18,15 +18,22 @@
  * commentaire entières sont retirées avant l'envoi (moins de texte à
  * recopier pour le modèle) — la comparaison porte sur ce corps-là.
  *
+ * La comparaison se fait EN DIRECT, dès l'événement `tool_call` : un
+ * script altéré s'exécuterait sinon quand même (avec ses effets de bord
+ * éventuels — auto-implementer.js, par exemple) avant d'être détecté.
+ * En cas d'altération, dsh est arrêté aussitôt (tout son groupe de
+ * processus, sous-agents compris) et une nouvelle tentative est lancée.
+ *
  * Usage :
- *   node 04-scripts/lancer-workflow.js <fichier.workflow.js> ['{"demande":"..."}']
- * Sortie : JSON {statut, script_identique, resultat, dossier} sur la
- * dernière ligne de stdout ; code 0 si le workflow a réellement tourné
- * jusqu'au bout avec le script exact, 1 sinon. Flux complet et prompt
- * conservés dans logs/workflows/<horodatage>-<nom>/.
+ *   node 04-scripts/lancer-workflow.js <fichier.workflow.js> ['{"demande":"..."}'] [tentatives=3]
+ * Sortie : JSON {statut, script_identique, tentatives, resultat, dossier}
+ * sur la dernière ligne de stdout ; code 0 si le workflow a réellement
+ * tourné jusqu'au bout avec le script exact, 1 sinon. Prompt et flux de
+ * chaque tentative conservés dans logs/workflows/<horodatage>-<nom>/.
  */
 import { readFileSync, writeFileSync, mkdirSync, createWriteStream } from 'fs';
 import { spawn } from 'child_process';
+import { createInterface } from 'readline';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { logInfo, logError } from './dsh-logger.js';
@@ -98,27 +105,45 @@ async function main() {
   mkdirSync(dossier, { recursive: true });
   const prompt = construirePrompt(meta, args, corps);
   writeFileSync(path.join(dossier, 'prompt.txt'), prompt);
-  const cheminEvenements = path.join(dossier, 'evenements.jsonl');
 
-  logInfo(COMPOSANT, `Lancement du workflow '${meta.name}'`, { context: { fichier, args, dossier } });
+  const maxTentatives = Number(process.argv[4] ?? 3);
+  logInfo(COMPOSANT, `Lancement du workflow '${meta.name}'`, { context: { fichier, args, dossier, maxTentatives } });
   const debut = Date.now();
-  const code = await new Promise((resolve) => {
-    const enfant = spawn('dsh', ['--profile', 'headless', '--json', '-'], { cwd: RACINE, stdio: ['pipe', 'pipe', 'pipe'] });
-    enfant.stdout.pipe(createWriteStream(cheminEvenements));
-    enfant.stderr.pipe(createWriteStream(path.join(dossier, 'stderr.txt')));
-    enfant.on('error', (err) => { logError(COMPOSANT, 'Impossible de lancer dsh', { err }); resolve(127); });
-    enfant.on('close', resolve);
-    enfant.stdin.end(prompt);
-  });
-
-  const analyse = analyserFlux(cheminEvenements, corps);
-  if (!analyse.script_identique && analyse.script_soumis) {
-    writeFileSync(path.join(dossier, 'script-soumis.js'), analyse.script_soumis);
-    writeFileSync(path.join(dossier, 'script-attendu.js'), corps);
-  }
+  let analyse = null, code = null, tentative = 0, altere = false;
+  do {
+    tentative += 1;
+    const cheminEvenements = path.join(dossier, `tentative-${tentative}-evenements.jsonl`);
+    altere = false;
+    code = await new Promise((resolve) => {
+      // detached : dsh et ses sous-agents dans leur propre groupe de
+      // processus, pour pouvoir tous les arrêter d'un coup.
+      const enfant = spawn('dsh', ['--profile', 'headless', '--json', '-'], { cwd: RACINE, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
+      const sortie = createWriteStream(cheminEvenements);
+      enfant.stderr.pipe(createWriteStream(path.join(dossier, `tentative-${tentative}-stderr.txt`)));
+      createInterface({ input: enfant.stdout }).on('line', (ligne) => {
+        sortie.write(ligne + '\n');
+        let e;
+        try { e = JSON.parse(ligne); } catch { return; }
+        if (!altere && e.type === 'tool_call' && e.tool === 'workflow' && normaliser(e.input?.script ?? '') !== normaliser(corps)) {
+          altere = true;
+          logError(COMPOSANT, `Tentative ${tentative} : script soumis altéré — arrêt immédiat de dsh avant exécution`, { context: { dossier } });
+          try { process.kill(-enfant.pid, 'SIGTERM'); } catch { enfant.kill('SIGTERM'); }
+        }
+      });
+      enfant.on('error', (err) => { logError(COMPOSANT, 'Impossible de lancer dsh', { err }); resolve(127); });
+      enfant.on('close', (c) => sortie.end(() => resolve(c)));
+      enfant.stdin.end(prompt);
+    });
+    analyse = analyserFlux(cheminEvenements, corps);
+    if (!analyse.script_identique && analyse.script_soumis) {
+      writeFileSync(path.join(dossier, `tentative-${tentative}-script-soumis.js`), analyse.script_soumis);
+    }
+  } while (altere && tentative < maxTentatives);
+  if (!analyse.script_identique) writeFileSync(path.join(dossier, 'script-attendu.js'), corps);
   const bilan = {
-    statut: analyse.statut,
+    statut: altere ? 'ALTERE_INTERROMPU' : analyse.statut,
     script_identique: analyse.script_identique,
+    tentatives: tentative,
     nb_appels_workflow: analyse.nb_appels_workflow ?? 0,
     code_dsh: code,
     duree_s: Math.round((Date.now() - debut) / 1000),
