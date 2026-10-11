@@ -14,6 +14,14 @@
 # prise en compte au prochain lancement de dsh, sans réinstallation.
 # Ajouter un plugin passe par une entrée `insert` du patch (une entrée
 # `- id:` seule ne fait que modifier un plugin existant : "entry not found").
+#
+# Règle aussi le moteur de workflows (workflow-ptc) sur un seul sous-agent
+# à la fois : par défaut il en lance autant que de cœurs, chacun dans son
+# propre processus Node, alors qu'Ollama ne traite qu'une requête à la
+# fois — aucun gain de vitesse, seulement de la mémoire en plus. Sur 24 Go
+# dont 21 pris par le modèle, un workflow complet a été arrêté faute de
+# mémoire (round 24). Un patch remplace toute la config du plugin : la
+# valeur d'origine provider: spawn est donc reprise.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 RACINE="$(pwd)"
@@ -77,11 +85,17 @@ entree = {"id": "workflows-projet", "name": "dsh-workflows-projet", "config": {"
 patch = [e for e in patch if not (isinstance(e, dict) and any(isinstance(x, dict) and x.get("id") == "workflows-projet" for x in e.get("insert", [])))]
 patch.append({"insert": [entree]})
 
+moteur = next((e for e in patch if isinstance(e, dict) and e.get("id") == "workflow-ptc"), None)
+if moteur is None:
+    moteur = {"id": "workflow-ptc", "name": "@deepseek-ai/dsh-workflow-ptc"}
+    patch.append(moteur)
+moteur["config"] = {"provider": "spawn", "maxConcurrentAgents": 1}
+
 with open(patch_path, "w") as f:
     f.write(entete)
     yaml.safe_dump(patch, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
-print(f"✅ {patch_path} mis à jour — workflow_projet déclaré (dossier : {dossier}).")
+print(f"✅ {patch_path} mis à jour — workflow_projet déclaré (dossier : {dossier}), un sous-agent de workflow à la fois.")
 PYEOF
 done
 
