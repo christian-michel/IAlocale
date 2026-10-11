@@ -32,7 +32,8 @@ const S = { type: 'string' }, N = { type: 'number' }, B = { type: 'boolean' }, L
 const obj = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required });
 const enu = (...v) => ({ type: 'string', enum: v });
 const J = JSON.stringify;
-const skill = (nom, consigne, label, schema) => agent(`Charge le skill \`${nom}\` (outil skill, name: "${nom}") et applique sa méthode.\n\n${consigne}`, { label, schema });
+// Le moteur refuse toute option non JSON (schema: undefined compris).
+const skill = (nom, consigne, label, schema) => agent(`Charge le skill \`${nom}\` (outil skill, name: "${nom}") et applique sa méthode.\n\n${consigne}`, schema ? { label, schema } : { label });
 const bash = (cmd, label) => agent(`Exécute avec l'outil bash : \`${cmd}\` et retourne sa sortie telle quelle.`, { label });
 const EVAL = obj({ score_global: N, evaluations: L({ type: 'object' }) }, ['score_global']);
 
