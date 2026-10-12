@@ -99,8 +99,12 @@ entrees = [
 ids = {e["id"] for e in entrees}
 # Retire d'éventuelles déclarations précédentes (idempotence), puis les remet.
 patch = [e for e in patch if not (isinstance(e, dict) and any(isinstance(x, dict) and x.get("id") in ids for x in e.get("insert", [])))]
-for entree in entrees:
-    patch.append({"insert": [entree]})
+# Profil à préréglages d'agent réécrits (configurer-profil-web.sh) : les
+# plugins y sont déclarés dans chaque préréglage, pas à la racine.
+a_preselections = any(isinstance(e, dict) and any(isinstance(x, dict) and x.get("id") == "presets-ialocale" for x in e.get("insert", [])) for e in patch)
+if not a_preselections:
+    for entree in entrees:
+        patch.append({"insert": [entree]})
 
 moteur = next((e for e in patch if isinstance(e, dict) and e.get("id") == "workflow-ptc"), None)
 if moteur is None:
