@@ -103,6 +103,13 @@ dsh --profile headless 'Explique-moi ce que fait 04-scripts/dsh-logger.js'
 # 7. Désactiver les outils d'objectif de dsh (create/get/update_goal),
 #    que le modèle appelle sur des objectifs inventés
 ./04-scripts/desactiver-outils-objectifs.sh
+
+# 8. RAG local sur 06-data/ (modèle d'embeddings léger, tourne sur CPU) et
+#    plugins du dépôt : contexte local injecté pour les messages
+#    conversationnels, lancement des workflows par leur nom
+ollama pull qwen3-embedding:0.6b
+node 04-scripts/connaissances.js indexer
+./04-scripts/installer-plugins-locaux.sh
 ```
 
 ⚠️ **Deux réglages ne survivent pas à un redémarrage de la machine**

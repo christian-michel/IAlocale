@@ -22,7 +22,7 @@ export HARNESS_HOME
 
 # `set -u` sans `-e` volontairement : un prérequis manquant ne doit pas
 # arrêter le script immédiatement — on veut voir TOUS les problèmes en un
-# seul passage (étapes 1 à 12), pas s'arrêter au premier et faire relancer
+# seul passage (étapes 1 à 13), pas s'arrêter au premier et faire relancer
 # le script autant de fois qu'il y a d'étapes en échec. `echec()` compte
 # plutôt qu'il n'arrête ; le code de sortie final (tout en bas) reflète
 # s'il y a eu au moins un échec.
@@ -128,6 +128,11 @@ etape "11. Outil de recherche web cloud désactivé"
 
 etape "12. Outils d'objectif (create/get/update_goal) désactivés"
 ./04-scripts/desactiver-outils-objectifs.sh || echec "desactiver-outils-objectifs.sh a échoué"
+
+etape "13. RAG local (06-data/) et plugins du dépôt (contexte local, workflows)"
+ollama pull qwen3-embedding:0.6b || echec "téléchargement du modèle d'embeddings qwen3-embedding:0.6b a échoué"
+node ./04-scripts/connaissances.js indexer || echec "indexation de 06-data/ a échoué"
+./04-scripts/installer-plugins-locaux.sh || echec "installer-plugins-locaux.sh a échoué"
 
 echo ""
 if [ "$ECHECS" -eq 0 ]; then

@@ -1926,6 +1926,98 @@ dépôt) a été envoyé et refusé (`Insufficient Balance`). Le profil a
   `.js` reviendrait à lui permettre d'écrire du code exécutable — une
   décision qui appartient à l'utilisateur.
 
+### Round 25 — les données locales (06-data/) utilisées d'abord pour le conversationnel : un vrai RAG local (2026-10-12)
+
+**Question de l'utilisateur** : le modèle tient-il compte des phrases
+écrites dans les dossiers locaux (sagesse...) ? **Réponse vérifiée :
+seulement s'il allait les lire lui-même.** Rien de `06-data/` n'était
+injecté dans une conversation ; il fallait que le modèle pense à charger
+`consulter-sagesse-interne`. Dans le workflow (round 24), les
+sous-agents ouvraient bien les fichiers (11 cas sur 13) mais ne les
+citaient presque jamais (2 sur 13). Et « indexé automatiquement »
+(README, pistes) ne désignait qu'une liste de noms de fichiers
+(`meta-index.json`) que **rien ne lisait**.
+
+**Demande de l'utilisateur** : « Il faut identifier le contexte. Si ce
+n'est pas de la technique ou de l'histoire et que c'est du
+conversationnel, alors il faut les utiliser avant d'aller sur
+internet, comme un RAG. » Choix de l'utilisateur : recherche par le
+sens (embeddings) ; dans le doute sur le contexte, consulter quand même.
+
+**Découverte en mesurant le corpus** : `Cahier 2.md` (7,4 Mo) et
+`Cahier 3.md` (25 Mo) sont à **99 % des images encodées en base64** —
+48 Ko et 125 Ko de vrai texte. Texte réel de `personnalite/` +
+`sagesse/` : ~450 Ko. Lire ces cahiers en entier noyait le modèle sous
+du bruit tronqué — une raison de plus pour laquelle la sagesse était
+mal utilisée. Le contenu des 14 images est aujourd'hui **invisible**
+pour le modèle (nature inconnue de l'utilisateur : à examiner, piste 6
+pour une éventuelle transcription par un modèle vision).
+
+**Construit :**
+- **`04-scripts/connaissances.js`** : index vectoriel du texte de
+  `06-data/` (images retirées et comptées, artefacts d'export nettoyés),
+  559 passages, recherche par le sens (~0,2 s). Modèle
+  `qwen3-embedding:0.6b`, **forcé sur CPU** — mesuré : sur GPU, même
+  réduit à 2,1 Go il ne tient pas à côté des 21 Go de qwen3-coder (limite
+  22,5 Go) et Ollama **décharge le gros modèle à chaque appel** ; sur CPU
+  (`num_gpu: 0`) les deux cohabitent (1,4 Go). Indexation complète ~5 min
+  (une fois), puis incrémentale. Pertinence mesurée : 0,60-0,73 sur des
+  messages conversationnels, ≤ 0,43 sur une question technique — seuil
+  retenu 0,55.
+- **`07-plugins/dsh-contexte-local`** : hook `agent/pre-step` (celui par
+  lequel dsh injecte le catalogue des skills) — à chaque nouveau message
+  humain d'une session de premier niveau, classement technique /
+  histoire / conversationnel par le modèle déjà chargé (sortie
+  contrainte, **12/12 justes** sur un jeu d'essai, ~0,6 s), puis
+  injection des passages pertinents si conversationnel ou incertain
+  (confiance < 0,7). Chaque décision est journalisée (`contexte-local`
+  dans `logs/pipeline.jsonl`) — traçabilité, rejoint le point 11.6.
+- **`skill-consulter-sagesse-interne`** : recherche par le sens au lieu
+  de `ls`/`grep`/lecture complète.
+- **`watch-knowledge-base.js`** tient l'index vectoriel à jour ; corrigé
+  au passage : il écrivait ses index dans le dossier qu'il surveille et
+  se redéclenchait en boucle.
+- `installer-plugin-workflows.sh` devient `installer-plugins-locaux.sh`
+  (les deux plugins) ; module commun `07-plugins/commun/dsh.js` ;
+  bootstrap étape 13 et README étape 8.
+
+**Premier essai réel, raté puis corrigé** : malgré les 5 passages
+injectés, le modèle a **relu lui-même les fichiers entiers** (Cahier 1,
+citations.txt : ~160 Ko) via le skill — contexte saturé, réponse coupée
+(`max-tokens`, texte final « # »). Corrigé : la consigne injectée dit
+que les passages suffisent (ne pas relire, ne pas charger le skill), et
+le skill lui-même ne lit plus de fichiers entiers. **Second essai :**
+réponse directe, sans aucun outil, construite sur les textes de
+l'utilisateur — **8 éléments sur 8 vérifiés présents dans 06-data/**
+(exercice du miroir, affirmations, alternance action/réflexion,
+citations de Goethe et Che Guevara ; le 8e est une paraphrase fidèle de
+« La confiance libère des souffrances » / « elle m'ouvre à l'amour de la
+vie », Cahier 1). Message technique : classé technique, rien injecté.
+
+**Pas de régression** : `suite-tests-reelle.sh` repasse à 0 échec avec
+le plugin actif sur `headless` (les 4 messages de la suite classés
+technique, rien injecté). Un premier passage avait échoué pour une
+raison sans rapport : la suite prenait la première ligne de
+`ollama list` (triée par date) comme modèle de test — désormais
+`qwen3-embedding`, incapable de chat. Corrigé : la suite lit le modèle
+du profil `headless`. Angle mort relevé au passage : un échec de la
+section 2 (décisions rapides) ne compte pas dans le bilan de la suite.
+
+**Limites, honnêtement :**
+- Installé sur `headless` uniquement. Le profil `web` (usage quotidien)
+  compose ses sessions par préréglages d'agent : l'effet d'un plugin
+  déclaré à la racine n'y est pas vérifié (même question ouverte que
+  `tool-web`/`tool-goal`, round 23).
+- Mémoire : le modèle d'embeddings ajoute 1,4 Go à côté des 21 Go du
+  modèle principal — ça tient, mais la marge est mince.
+- La confiance du classement est auto-déclarée par le modèle (point
+  11.3) ; « dans le doute, consulter » limite le risque d'un faux
+  « technique ».
+- Le contenu des images base64 n'est pas lu.
+- Aucun outil de recherche internet n'est actif (round 12) : « avant
+  d'aller sur internet » revient aujourd'hui à « avant les connaissances
+  générales du modèle ».
+
 ## 🌱 Étendre vers la personnalité / sagesse / philosophie
 
 Le skill `skill-personnalite-et-sagesse.md` est un point d'entrée
