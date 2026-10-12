@@ -1982,8 +1982,10 @@ dsh-harness/
 │   ├── meta-experimentation.workflow.json
 │   └── recherche-approfondie.workflow.json
 │
-├── 07-plugins/
-│   └── dsh-workflows-projet/      # outil workflow_projet : lance un workflow par son nom (round 24)
+├── 07-plugins/                 # plugins dsh du dépôt, installés par lien (installer-plugins-locaux.sh)
+│   ├── commun/dsh.js              # charge @deepseek-ai/* depuis l'installation de dsh qui exécute le plugin
+│   ├── dsh-workflows-projet/      # outil workflow_projet : lance un workflow par son nom (round 24)
+│   └── dsh-contexte-local/        # classe chaque message ; conversationnel → passages de 06-data/ injectés (round 25)
 │
 ├── 04-scripts/
 │   │ # Infrastructure (logs, mémoire, validation)
@@ -2012,7 +2014,8 @@ dsh-harness/
 │   ├── configurer-skills-dsh.sh       # déclare 01-skills/ à dsh (customSkillDirs, testé)
 │   ├── desactiver-recherche-web-cloud.sh  # désactive l'outil web câblé sur l'API cloud DeepSeek (testé)
 │   ├── desactiver-outils-objectifs.sh     # désactive create/get/update_goal, appelés sur des objectifs inventés (testé, round 23)
-│   ├── installer-plugin-workflows.sh      # installe 07-plugins/dsh-workflows-projet, 1 sous-agent à la fois (testé, round 24)
+│   ├── installer-plugins-locaux.sh        # installe les plugins de 07-plugins/, 1 sous-agent de workflow à la fois (testé, rounds 24-25)
+│   ├── connaissances.js                   # RAG local : index vectoriel du texte de 06-data/, recherche par le sens (testé, round 25)
 │   ├── lancer-workflow.js                 # lance un workflow via workflow_projet, vérifie l'appel en direct (testé, round 24)
 │   ├── security-check.sh
 │   │ # Confort au quotidien (optionnels)

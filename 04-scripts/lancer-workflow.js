@@ -14,7 +14,7 @@
  * qui n'est pas exactement `workflow_projet` avec ce nom et ces args
  * arrête dsh aussitôt (tout son groupe de processus, sous-agents
  * compris), avant exécution, et une nouvelle tentative est lancée.
- * Prérequis : ./04-scripts/installer-plugin-workflows.sh headless
+ * Prérequis : ./04-scripts/installer-plugins-locaux.sh headless
  *
  * Usage :
  *   node 04-scripts/lancer-workflow.js <nom> ['{"demande":"..."}'] [tentatives=3]

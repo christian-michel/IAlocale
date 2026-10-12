@@ -5,6 +5,9 @@ import crypto from 'crypto';
 import { logInfo, logSilentError } from './dsh-logger.js';
 // HARNESS_HOME : voir config.js, seule déclaration du projet.
 import { HARNESS_HOME } from './config.js';
+// Index vectoriel du RAG local (round 25) : tenu à jour en même temps que
+// meta-index.json — seuls les fichiers modifiés sont ré-encodés.
+import { indexer as indexerVecteurs } from './connaissances.js';
 
 const KNOWLEDGE_BASE = path.join(HARNESS_HOME, '06-data');
 const INDEX_FILE = path.join(KNOWLEDGE_BASE, 'meta-index.json');
@@ -12,7 +15,7 @@ const INDEX_FILE = path.join(KNOWLEDGE_BASE, 'meta-index.json');
 // memoire-cli.js) interrogeables par requête exacte, pas du texte à
 // indexer sémantiquement — voir skill-gestion-memoire.md.
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.DS_Store', 'memoire']);
-const EXCLUDED_FILES = new Set(['meta-index.json']);
+const EXCLUDED_FILES = new Set(['meta-index.json', 'index-vectoriel.json']);
 
 function checksum(content) {
   return crypto.createHash('sha256').update(content).digest('hex');
@@ -78,6 +81,11 @@ async function updateIndex() {
   } catch (err) {
     logSilentError('watcher', "Échec de la mise à jour de l'index — l'agent va continuer à consulter un index périmé sans le savoir", { err });
   }
+  try {
+    await indexerVecteurs();
+  } catch (err) {
+    logSilentError('watcher', "Échec de la mise à jour de l'index vectoriel (Ollama joignable ? modèle d'embeddings présent ?) — contexte-local injectera des passages périmés ou aucun", { err });
+  }
 }
 
 logInfo('watcher', `Surveillance démarrée sur ${KNOWLEDGE_BASE}`);
@@ -87,6 +95,10 @@ await updateIndex();
 let debounce = null;
 const watcher = watch(KNOWLEDGE_BASE, { recursive: true }, (_event, filename) => {
   if (!filename) return;
+  // Les index sont écrits DANS le dossier surveillé : sans ce filtre,
+  // chaque mise à jour en déclenchait une autre, en boucle.
+  if (EXCLUDED_FILES.has(path.basename(filename))) return;
+  if (filename.split(path.sep).some((part) => EXCLUDED_DIRS.has(part))) return;
   clearTimeout(debounce);
   debounce = setTimeout(updateIndex, 1000);
 });

@@ -1,14 +1,15 @@
 #!/bin/bash
-# installer-plugin-workflows.sh — installe le plugin dsh local
-# 07-plugins/dsh-workflows-projet (outil `workflow_projet`) sur les profils
-# headless et web (ou ceux passés en arguments), et le déclare dans leur
-# cordis.patch.yml.
+# installer-plugins-locaux.sh — installe les plugins dsh du dépôt
+# (07-plugins/) sur les profils headless et web (ou ceux passés en
+# arguments), et les déclare dans leur cordis.patch.yml :
 #
-# Pourquoi ce script existe (voir documentation/historique-du-projet.md,
-# round 24) : l'outil `workflow` natif de dsh oblige le modèle à recopier
-# tout le script dans son appel d'outil, ce que qwen3-coder rate en local.
-# `workflow_projet` lit le script dans 03-workflows/<nom>.workflow.js et le
-# confie au même moteur — le modèle ne donne qu'un nom et des args.
+# - dsh-workflows-projet (outil `workflow_projet`, round 24) : l'outil
+#   `workflow` natif oblige le modèle à recopier tout le script dans son
+#   appel d'outil, ce que qwen3-coder rate en local ; `workflow_projet`
+#   lit 03-workflows/<nom>.workflow.js et le confie au même moteur.
+# - dsh-contexte-local (round 25) : avant chaque réponse, classe le
+#   contexte du message ; s'il est conversationnel, injecte les passages
+#   pertinents de 06-data/ (index : 04-scripts/connaissances.js indexer).
 #
 # Installé par lien (link:) : une modification du plugin dans le dépôt est
 # prise en compte au prochain lancement de dsh, sans réinstallation.
@@ -25,7 +26,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 RACINE="$(pwd)"
-PLUGIN="$RACINE/07-plugins/dsh-workflows-projet"
 DOSSIER_WORKFLOWS="$RACINE/03-workflows"
 DOSSIER_SKILLS="$RACINE/01-skills"
 
@@ -54,14 +54,21 @@ for PROFIL in "${PROFILS[@]}"; do
         echo "       config:"
         echo "         dossier: $DOSSIER_WORKFLOWS"
         echo "         dossierSkills: $DOSSIER_SKILLS"
+        echo "   - insert:"
+        echo "     - id: contexte-local"
+        echo "       name: dsh-contexte-local"
+        echo "       config:"
+        echo "         modele: <le modèle de agent-default-model>"
         continue
     fi
 
-    echo "📦 Installation du plugin dsh-workflows-projet (lien) pour le profil '$PROFIL'..."
-    (cd /tmp && dsh plugin --profile "$PROFIL" add "link:$PLUGIN" >/dev/null) \
-        || { echo "❌ dsh plugin add a échoué pour le profil '$PROFIL'."; exit 1; }
+    for PLUGIN in dsh-workflows-projet dsh-contexte-local; do
+        echo "📦 Installation du plugin $PLUGIN (lien) pour le profil '$PROFIL'..."
+        (cd /tmp && dsh plugin --profile "$PROFIL" add "link:$RACINE/07-plugins/$PLUGIN" >/dev/null) \
+            || { echo "❌ dsh plugin add $PLUGIN a échoué pour le profil '$PROFIL'."; exit 1; }
+    done
 
-    echo "🔌 Déclaration de workflow_projet dans $PATCH_FILE..."
+    echo "🔌 Déclaration des plugins dans $PATCH_FILE..."
     python3 - "$PATCH_FILE" "$DOSSIER_WORKFLOWS" "$DOSSIER_SKILLS" << 'PYEOF'
 import sys
 import yaml
@@ -82,10 +89,18 @@ if not isinstance(patch, list):
     print(f"❌ {patch_path} : format inattendu (pas une liste au niveau racine), fusion refusée.", file=sys.stderr)
     sys.exit(1)
 
-entree = {"id": "workflows-projet", "name": "dsh-workflows-projet", "config": {"dossier": dossier, "dossierSkills": dossier_skills}}
-# Retire une éventuelle déclaration précédente (idempotence), puis la remet.
-patch = [e for e in patch if not (isinstance(e, dict) and any(isinstance(x, dict) and x.get("id") == "workflows-projet" for x in e.get("insert", [])))]
-patch.append({"insert": [entree]})
+# Modèle de classement de dsh-contexte-local : celui que le profil utilise
+# déjà (écrit par setup-local-model.sh), donc déjà chargé — pas de bascule.
+modele = next((e.get("config", {}).get("model") for e in patch if isinstance(e, dict) and e.get("id") == "agent-default-model"), None) or "qwen3-coder:30b-a3b-q4_K_M"
+entrees = [
+    {"id": "workflows-projet", "name": "dsh-workflows-projet", "config": {"dossier": dossier, "dossierSkills": dossier_skills}},
+    {"id": "contexte-local", "name": "dsh-contexte-local", "config": {"modele": modele}},
+]
+ids = {e["id"] for e in entrees}
+# Retire d'éventuelles déclarations précédentes (idempotence), puis les remet.
+patch = [e for e in patch if not (isinstance(e, dict) and any(isinstance(x, dict) and x.get("id") in ids for x in e.get("insert", [])))]
+for entree in entrees:
+    patch.append({"insert": [entree]})
 
 moteur = next((e for e in patch if isinstance(e, dict) and e.get("id") == "workflow-ptc"), None)
 if moteur is None:
@@ -97,12 +112,14 @@ with open(patch_path, "w") as f:
     f.write(entete)
     yaml.safe_dump(patch, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
-print(f"✅ {patch_path} mis à jour — workflow_projet déclaré (dossier : {dossier}), un sous-agent de workflow à la fois.")
+print(f"✅ {patch_path} mis à jour — workflow_projet et contexte-local déclarés (modèle de classement : {modele}), un sous-agent de workflow à la fois.")
 PYEOF
 done
 
 echo ""
 echo "Vérifie avec :"
-echo "  dsh --profile headless --dump-config | grep -A4 'id: workflows-projet'"
+echo "  dsh --profile headless --dump-config | grep -A4 -E 'id: (workflows-projet|contexte-local)'"
+echo "L'index des données locales (06-data/) doit exister :"
+echo "  node 04-scripts/connaissances.js indexer"
 echo "Puis lance un workflow avec :"
 echo "  node 04-scripts/lancer-workflow.js systeme-auto-ameliorant-avec-controle '{\"demande\":\"...\"}'"

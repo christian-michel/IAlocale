@@ -23,21 +23,27 @@ Tu es un gardien de la sagesse locale. Avant de chercher une réponse sur intern
    - Demande technique → `06-data/cours-techniques/`
    - Demande webmarketing → `06-data/cours-webmarketing/`
 
-2. **Ne jamais deviner le contenu d'un dossier — le lister pour de
-   vrai.** `ls -R <dossier concerné>` via l'outil bash, systématiquement,
-   avant de chercher quoi que ce soit dedans. Un dossier qu'on croit
-   vide ou qu'on suppose ne pas contenir le sujet demandé peut très bien
-   contenir exactement le fichier pertinent sous un nom qu'on n'attendait
-   pas.
-3. **Chercher les mots-clés de la question dans les fichiers listés**
-   (`grep -ril "<mots-clés>" <dossier>` via l'outil bash) — essaie aussi
-   des synonymes proches si la première recherche ne donne rien.
-4. **Lire en entier** chaque fichier trouvé par le `grep` (pas
-   seulement l'extrait qui a matché) via l'outil de lecture de fichiers.
-5. **Extraire les informations clés** : principes, règles, ou concepts.
-6. **Retourner un résumé structuré**, en citant le fichier source —
-   jamais une réponse qui a l'air de venir de là sans qu'aucun fichier
-   n'ait réellement été listé, cherché et lu.
+2. **Si des passages de 06-data/ figurent déjà dans la conversation**
+   (bloc « Contexte détecté : … » injecté automatiquement par le plugin
+   dsh-contexte-local), pars d'eux : ils viennent d'être retrouvés pour
+   ce message. Ne relis pas les fichiers entiers.
+3. **Sinon, cherche par le sens** — jamais en lisant les fichiers en
+   entier : `node 04-scripts/connaissances.js rechercher "<la question,
+   reformulée si besoin>" --k 8` via l'outil bash. Renvoie les passages
+   les plus proches, avec leur fichier et leur pertinence (0 à 1 ; en
+   dessous de ~0,55, le passage n'a probablement pas de rapport).
+   Pourquoi pas `ls`/`grep`/lecture complète : plusieurs fichiers font
+   des dizaines de Mo (Cahier 2 et 3 sont à 99 % des images encodées),
+   les lire sature le contexte et la réponse est coupée — constaté en
+   conditions réelles (round 25, documentation/historique-du-projet.md).
+   Si la recherche signale un index absent :
+   `node 04-scripts/connaissances.js indexer`, puis recommence.
+4. **Extraire les informations clés** des passages pertinents :
+   principes, règles, ou concepts. Lis au besoin un court extrait autour
+   d'un passage, jamais un fichier entier.
+5. **Retourner un résumé structuré**, en citant le fichier source —
+   jamais une réponse qui a l'air de venir de là sans qu'aucun passage
+   n'ait réellement été retrouvé.
 
 ## Règle d'Or
 

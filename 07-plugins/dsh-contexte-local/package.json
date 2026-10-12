@@ -1,0 +1,12 @@
+{
+  "name": "dsh-contexte-local",
+  "version": "0.1.0",
+  "description": "Plugin dsh : classe le contexte de chaque message et injecte les passages pertinents de 06-data/ (RAG local) pour les échanges conversationnels.",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "keywords": ["dsh-plugin"],
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": "0.2.1-alpha.1"
+  }
+}

@@ -10,6 +10,8 @@ logs/
 
 # Index RAG régénéré automatiquement par watch-knowledge-base.js.
 06-data/meta-index.json
+# Index vectoriel (connaissances.js) — régénérable, propre à la machine.
+06-data/index-vectoriel.json
 
 # Mémoire structurée de l'agent (memoire-cli.js) — état d'exécution,
 # propre à chaque machine, pas du code versionné.
