@@ -111,8 +111,13 @@ jamais déclenché ce chemin).
 
 **État actuel** : `01-skills/skill-personnalite-et-sagesse.md` est un point
 d'entrée volontairement vide. `06-data/personnalite/` et `06-data/sagesse/`
-sont déjà indexés automatiquement par `04-scripts/watch-knowledge-base.js`
-(aucun changement de code nécessaire pour y ajouter des fichiers `.md`).
+sont indexés par le sens depuis le round 25 (`04-scripts/connaissances.js`,
+tenu à jour par `04-scripts/watch-knowledge-base.js` — aucun changement de
+code pour ajouter des fichiers `.md`/`.txt`/`.csv`), et injectés
+automatiquement pour les messages conversationnels par le plugin
+`07-plugins/dsh-contexte-local`. **Correction** : avant le round 25,
+« indexé automatiquement » ne voulait dire qu'une liste de noms de
+fichiers (`meta-index.json`) que rien ne lisait.
 
 **Reste à faire** :
 - Vérifier si `watch-knowledge-base.js` sait déjà extraire le texte d'un PDF,
@@ -129,7 +134,7 @@ qu'une clé devrait être révisée, il peut le proposer via le mécanisme
 d'auto-implémentation existant, sans qu'il faille étendre son périmètre.
 Les **citations des sages**, à l'inverse, sont de la référence passive
 (pas un comportement à réviser) — elles vivent dans
-`06-data/sagesse/citations-sages/`, indexées automatiquement, sans
+`06-data/sagesse/citations-sages/`, indexées par le sens (round 25), sans
 mécanisme de révision.
 
 Un nouveau skill `01-skills/skill-persona-relations-humaines.md` encode

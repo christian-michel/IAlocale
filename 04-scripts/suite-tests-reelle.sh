@@ -100,9 +100,16 @@ journal ""
 # avoir été écrit, et decision-rapide.js échouerait alors systématiquement
 # avec "Aucun modèle déclaré". On prend simplement le premier modèle que
 # Ollama liste réellement.
-MODELE_DETECTE=$(ollama list | awk 'NR==2 {print $1}')
+# Correction (round 25) : `ollama list` trie par date — après le
+# téléchargement du modèle d'embeddings, la première ligne était
+# qwen3-embedding:0.6b, incapable de chat (section 2 en échec 400, A.1
+# vérifiant le mauvais modèle). On prend d'abord le modèle que le profil
+# headless utilise réellement, sinon le premier modèle qui n'est pas un
+# modèle d'embeddings.
+MODELE_DETECTE=$(dsh --profile headless --dump-config 2>/dev/null | grep -A4 "id: agent-default-model" | awk '/model:/ {print $2; exit}')
+[ -z "$MODELE_DETECTE" ] && MODELE_DETECTE=$(ollama list | awk 'NR>1 && $1 !~ /embed/ {print $1; exit}')
 if [ -n "$MODELE_DETECTE" ]; then
-    journal "Modèle utilisé pour la section 2 (détecté via 'ollama list') : $MODELE_DETECTE"
+    journal "Modèle utilisé pour la section 2 (profil headless, sinon 'ollama list') : $MODELE_DETECTE"
 else
     journal "ATTENTION : aucun modèle détecté via 'ollama list' — la section 2 va probablement échouer."
 fi

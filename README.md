@@ -165,9 +165,14 @@ laisser deviner.
   `auto-implementer.js`, limité à `01-skills/` et `03-workflows/`).
 - **`06-data/personnalite/`** et **`06-data/sagesse/`** — tes propres
   contenus (valeurs, méthode, citations, clés relationnelles) : de
-  simples fichiers `.md`/`.csv`/`.txt`, indexés automatiquement par le
-  watcher, consultés par les skills `consulter-sagesse-interne` et
-  `persona-relations-humaines` avant toute réponse sur ces sujets.
+  simples fichiers `.md`/`.csv`/`.txt`, indexés par le sens
+  (`node 04-scripts/connaissances.js indexer`, puis tenu à jour par le
+  watcher). Pour tout message conversationnel (ni technique ni
+  historique), le plugin `dsh-contexte-local` injecte automatiquement les
+  passages pertinents avant la réponse ; les skills
+  `consulter-sagesse-interne` et `persona-relations-humaines` les
+  utilisent aussi. Les images collées dans un fichier (base64) sont
+  ignorées : leur contenu n'est pas lu.
 - **`05-configs/modeles.yaml`** — ajoute tes propres profils de modèle
   nommés, basculables avec `basculer-modele.sh`.
 
